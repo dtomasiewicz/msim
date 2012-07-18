@@ -140,19 +140,21 @@ WW3.prototype = {
   // computes new heading periodically while left/right is pressed
   _computeHeading: function() {
     var player = this.player();
+    // invert turning while backing up
+    var direction = player.direction == -1 ? -1 : 1;
 
     if(this._keys[KeyCodes.LEFT] || this._keys[KeyCodes.RIGHT]) {
       if(this._keys[KeyCodes.LEFT]) {
         if(!this._keys[KeyCodes.RIGHT]) {
           // adjust it before receive a response so that subsequent headings are
           // added to THIS one (results in uniform rotation)
-          player.heading = WW3.mod(player.heading-this.ROTATE_DELTA, 1.0);
+          player.heading = WW3.mod(player.heading-this.ROTATE_DELTA*direction, 1.0);
           this._gamz.act('heading', player.heading);
         } else {
           // both pressed-- maintain heading
         }
       } else {
-        player.heading = WW3.mod(player.heading+this.ROTATE_DELTA, 1.0);
+        player.heading = WW3.mod(player.heading+this.ROTATE_DELTA*direction, 1.0);
         this._gamz.act('heading', player.heading);
       }
       var self = this;

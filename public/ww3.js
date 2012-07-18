@@ -61,19 +61,12 @@ WW3.prototype = {
     this.players[player.id] = player;
     player._li = $('<li></li>').get();
     $(this.display.players).append(player._li);
-    this._refreshPlayer(player);
+    player.refresh();
   },
 
   _removePlayer: function(player) {
     delete this.players[player.id];
     $(player._li).remove();
-  },
-
-  _refreshPlayer: function(player) {
-    $(player._li).text(
-      player.id+' ('+player.x+', '+player.y+') @ '+
-      (Math.round(player.heading*10)/10)+', lat '+Math.round(player.latency*1000)+' ms'
-    );
   },
 
   _opened: function() {
@@ -180,9 +173,8 @@ WW3.prototype = {
 
     ctx.fillStyle = 'black';
     for(var id in this.players) {
-      var predicted = this._predict(this.players[id]);
-      ctx.fillRect(predicted.x-3, predicted.y-3, 7, 7);
-      this._refreshPlayer(this.players[id]);
+      var predict = this._predict(this.players[id]);
+      ctx.fillRect(predict.x-3, predict.y-3, 7, 7);
     }
   },
 
@@ -215,6 +207,7 @@ WW3.prototype = {
         data.h = this.player().heading;
       }
       this.players[data.i].update(data);
+      this.players[data.i].refresh();
     }
 
   }
@@ -240,5 +233,14 @@ WW3Player.prototype = {
     this.speed = data.s;
     this.direction = data.d;
     this.latency = data.l;
+  },
+
+  refresh: function() {
+    if(this._li) {
+      $(this._li).text(
+        this.id+' ('+this.x+', '+this.y+') @ '+
+        (Math.round(this.heading*10)/10)+', lat '+Math.round(this.latency*1000)+' ms'
+      );
+    }
   }
 };

@@ -127,8 +127,7 @@ class World
 
   def react_heading(avatar, heading)
     avatar.heading = heading.to_f % 1.0
-    # avatars always know their own heading
-    notify_except avatar, :data, avatar.data
+    notify_all :data, avatar.data
     :success
   end
 

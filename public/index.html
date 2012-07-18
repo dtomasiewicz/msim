@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>World War 3</title>
+    <script src="gamz-client.js"></script>
+    <script src="jquery.js"></script>
+    <script src="ww3.js"></script>
+    <script>
+      $(function() {
+        new WW3({
+          canvas: $('#ww3').get(0),
+          players: $('#ww3-players').get(0)
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <h1>World War 3</h1>
+    <canvas id="ww3" tabindex="1" style="border: 1px solid #000"></canvas>
+    <h2>Players</h2>
+    <ul id="ww3-players">
+    </ul>
+  </body>
+</html>

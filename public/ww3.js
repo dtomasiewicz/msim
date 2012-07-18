@@ -173,8 +173,9 @@ WW3.prototype = {
 
     ctx.fillStyle = 'black';
     for(var id in this.players) {
-      var predict = this._predict(this.players[id]);
-      ctx.fillRect(predict.x-3, predict.y-3, 7, 7);
+      var player = this.players[id];
+      this._predict(player);
+      ctx.fillRect(Math.floor(player.x)-3, Math.floor(player.y)-3, 7, 7);
     }
   },
 
@@ -183,10 +184,9 @@ WW3.prototype = {
     var dist = player.speed*(new Date() - player.updated)/1000;
 
     // calculate x and y components of this distance
-    var x = WW3.mod(player.x + Math.round(dist*Math.cos(player.heading*2*Math.PI)*player.direction), this.width());
-    var y = WW3.mod(player.y + Math.round(dist*Math.sin(player.heading*2*Math.PI)*player.direction), this.height());
-
-    return {x: x, y: y};
+    player.x = WW3.mod(player.x + dist*Math.cos(player.heading*2*Math.PI)*player.direction, this.width());
+    player.y = WW3.mod(player.y + dist*Math.sin(player.heading*2*Math.PI)*player.direction, this.height());
+    player.updated = new Date();
   },
 
   _notifyHandlers: {

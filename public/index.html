@@ -7,18 +7,31 @@
     <script src="ww3.js"></script>
     <script>
       $(function() {
-        new WW3({
-          canvas: $('#ww3').get(0),
-          players: $('#ww3-players').get(0)
+        var game = new WW3({
+          target: $('#ww3').get(0)
         });
+
+        $('#prediction').change(function() {
+          game.prediction = this.value;
+          game.display.canvas.focus();
+        }).change();
       });
     </script>
+    <style>
+      .ww3-canvas {
+        border: 1px solid #000;
+      }
+    </style>
   </head>
   <body>
     <h1>World War 3</h1>
-    <canvas id="ww3" tabindex="1" style="border: 1px solid #000"></canvas>
-    <h2>Players</h2>
-    <ul id="ww3-players">
-    </ul>
+    <p>Prediction mode: 
+      <select id="prediction">
+        <option value="interpolate">interpolate</option>
+        <option value="extrapolate">extrapolate</option>
+        <option value="none">none</option>
+      </select>
+    </p>
+    <div id="ww3"></div>
   </body>
 </html>

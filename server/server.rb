@@ -3,7 +3,7 @@ require 'gamz/server'
 
 class Avatar
 
-  attr_reader :client, :direction, :x, :y, :heading, :speed
+  attr_reader :id, :client, :direction, :x, :y, :heading, :speed
   attr_accessor :latency
 
   def initialize(world, id)
@@ -12,7 +12,7 @@ class Avatar
     @direction = 0
     @x, @y = 0, 0
     @heading = 0.0 # radians/(2pi) .. [0.0, 1.0)
-    @speed = 100 # per second
+    @speed = 200 # per second
   end
 
   def forward!
@@ -99,12 +99,8 @@ class World
     @avatars[client]
   end
 
-  def react_self(avatar)
-    [:success, avatar.data]
-  end
-
   def react_info(avatar)
-    [:success, @width, @height, @avatars.values.map(&:data)]
+    [:success, @width, @height, @avatars.values.map(&:data), avatar.id]
   end
 
   def react_forward(avatar)

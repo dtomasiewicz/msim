@@ -9,9 +9,27 @@ var KeyCodes = {
   }
 };
 
-var WW3 = function(display) {
+/*
+ * Options:
+ *   target = element|[none]
+ *     the containing element to which the canvas and players list will be appended
+ *   prediction = none|extrapolate|[interpolate]
+ *     the position prediction scheme to use when rendering players
+ */
+var WW3 = function(options) {
+  if(typeof options == 'undefined') options = {};
 
-  this.display = display;
+  this.display = {
+    canvas: $('<canvas class="ww3-canvas" tabindex="1"></canvas>').get(0),
+    players: $('<ul class="ww3-players"></ul>').get(0)
+  };
+
+  if('target' in options) {
+    $(options.target).append(this.display.canvas, this.display.players);
+    this.display.canvas.focus();
+  }
+
+  this.prediction = 'prediction' in options ? options.prediction : 'interpolate';
 
   this.players = null;
   this._playerId = null;
@@ -41,11 +59,11 @@ WW3.mod = function(a, b) {
 
 WW3.prototype = {
 
-  ROTATE_DELTA: 0.025,
+  ROTATE_DELTA: 0.05,
   ROTATE_FREQUENCY: 100,
   REDRAW_FREQUENCY: 25,
 
-  player: function(player) {
+  player: function() {
     return this.players[this._playerId];
   },
 
@@ -72,69 +90,73 @@ WW3.prototype = {
   _opened: function() {
     var self = this;
 
-    this._gamz.act('self', [], function(me) {
-      self._playerId = me.i;
-    });
-
-    this._gamz.act('info', [], function(width, height, players) {
+    this._gamz.act('info', [], function(width, height, players, playerId) {
       self.display.canvas.width = width;
       self.display.canvas.height = height;
+      self._playerId = playerId;
 
       self.players = {};
       for(var i = 0; i < players.length; i++) {
-        self._addPlayer(new WW3Player(players[i]));
+        self._addPlayer(new WW3Player(self._translateData(players[i])));
       }
     });
 
     self.display.canvas.onkeydown = function(e) {
-      if(KeyCodes.isArrow(e.keyCode) && !self._keys[e.keyCode]) {
-        self._keys[e.keyCode] = true;
+      if(KeyCodes.isArrow(e.keyCode)) {
+        e.preventDefault();
 
-        // some browsers fire keydown for each "press"-- we only want the first
-        if(e.keyCode == KeyCodes.UP) {
-          if(self._keys[KeyCodes.DOWN]) {
-            self._gamz.act('stop');
+        if(!self._keys[e.keyCode]) {
+          self._keys[e.keyCode] = true;
+
+          // some browsers fire keydown for each "press"-- we only want the first
+          if(e.keyCode == KeyCodes.UP) {
+            if(self._keys[KeyCodes.DOWN]) {
+              self._gamz.act('stop');
+            } else {
+              self._gamz.act('forward');
+            }
+          } else if(e.keyCode == KeyCodes.DOWN) {
+            if(self._keys[KeyCodes.UP]) {
+              self._gamz.act('stop');
+            } else {
+              self._gamz.act('backward');
+            }
           } else {
-            self._gamz.act('forward');
+            self._computeHeading();
           }
-        } else if(e.keyCode == KeyCodes.DOWN) {
-          if(self._keys[KeyCodes.UP]) {
-            self._gamz.act('stop');
-          } else {
-            self._gamz.act('backward');
-          }
-        } else {
-          self._computeHeading();
         }
       }
     };
 
     self.display.canvas.onkeyup = function(e) {
-      if(KeyCodes.isArrow(e.keyCode) && self._keys[e.keyCode]) {
-        self._keys[e.keyCode] = false;
+      if(KeyCodes.isArrow(e.keyCode)) {
+        e.preventDefault();
+        
+        if(self._keys[e.keyCode]) {
+          self._keys[e.keyCode] = false;
 
-        if(e.keyCode == KeyCodes.UP) {
-          if(self._keys[KeyCodes.DOWN]) {
-            self._gamz.act('backward');
-          } else {
-            self._gamz.act('stop');
-          }
-        } else if(e.keyCode == KeyCodes.DOWN) {
-          if(self._keys[KeyCodes.UP]) {
-            self._gamz.act('forward');
-          } else {
-            self._gamz.act('stop');
+          if(e.keyCode == KeyCodes.UP) {
+            if(self._keys[KeyCodes.DOWN]) {
+              self._gamz.act('backward');
+            } else {
+              self._gamz.act('stop');
+            }
+          } else if(e.keyCode == KeyCodes.DOWN) {
+            if(self._keys[KeyCodes.UP]) {
+              self._gamz.act('forward');
+            } else {
+              self._gamz.act('stop');
+            }
           }
         }
       }
     }
 
     var redraw;
-    redraw = function() {
+    (redraw = function () {
       self._redraw();
       setTimeout(redraw, self.REDRAW_FREQUENCY);
-    };
-    redraw();
+    })();
   },
 
   // computes new heading periodically while left/right is pressed
@@ -165,30 +187,78 @@ WW3.prototype = {
   },
 
   _redraw: function() {
-    if(self._playerId === null || self.players === null) {
-      // only draw if loaded
-      return;
-    }
+    // only draw if loaded
+    if(this._playerId === null) return;
+
+    var predictor = this['_predict_'+this.prediction];
 
     var ctx = this.display.canvas.getContext('2d');
     ctx.clearRect(0, 0, this.display.canvas.width, this.display.canvas.height);
 
     ctx.fillStyle = 'black';
     for(var id in this.players) {
-      var player = this.players[id];
-      this._predict(player);
-      ctx.fillRect(Math.floor(player.x)-3, Math.floor(player.y)-3, 7, 7);
+      ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
+      this._drawPlayer(ctx, predictor.call(this, this.players[id]));
     }
   },
 
-  _predict: function(player) {
-    // estimate distance moved since last update
+  _drawPlayer: function(ctx, player) {
+    // floor so that we always get a value on the canvas
+    var h = player.heading*2*Math.PI;
+
+    // TODO constants/options?
+    var radius = 5;
+    var point = 10;
+
+    ctx.beginPath();
+    // semi-circle
+    ctx.arc(Math.floor(player.x), Math.floor(player.y), radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
+    // first side of the point
+    var x_ = Math.cos(2*Math.PI - h)*point;
+    var y_ = Math.sin(2*Math.PI - h)*point;
+    ctx.lineTo(Math.floor(player.x + x_), Math.floor(player.y - y_));
+    // second side of the point
+    ctx.closePath();
+    ctx.fill();
+  },
+
+  _predict_none: function(player) {
+    return player;
+  },
+
+  _predict_extrapolate: function(player) {
+    // use previously predicted values if present and not outdated
+    var base = player._predicted > player.updated ? player._predicted : player;
+
+    // extrapolate distance travelled since last update
     var dist = player.speed*(new Date() - player.updated)/1000;
 
-    // calculate x and y components of this distance
-    player.x = WW3.mod(player.x + dist*Math.cos(player.heading*2*Math.PI)*player.direction, this.width());
-    player.y = WW3.mod(player.y + dist*Math.sin(player.heading*2*Math.PI)*player.direction, this.height());
-    player.updated = new Date();
+    return player._predicted = {
+      direction: player.direction,
+      heading: player.heading,
+      x: WW3.mod(player.x + dist*Math.cos(player.heading*2*Math.PI)*player.direction, this.width()),
+      y: WW3.mod(player.y + dist*Math.sin(player.heading*2*Math.PI)*player.direction, this.height()),
+      updated: new Date()
+    };
+  },
+
+  _predict_interpolate: function(player) {
+    // TODO
+    return this._predict_extrapolate(player);
+  },
+
+  // translates condensed (wire) formatted player attributes to the format used
+  // by the Player class
+  _translateData: function(wire) {
+    data = {};
+    if('i' in wire) data.id = wire.i;
+    if('x' in wire) data.x = wire.x;
+    if('y' in wire) data.y = wire.y;
+    if('h' in wire) data.heading = wire.h;
+    if('s' in wire) data.speed = wire.s;
+    if('d' in wire) data.direction = wire.d;
+    if('l' in wire) data.latency = wire.l;
+    return data;
   },
 
   _notifyHandlers: {
@@ -203,13 +273,12 @@ WW3.prototype = {
 
     // updates player data
     data: function(data) {
-      if(data.i == this._playerId) {
-        // we determine our own heading, so there is no need to correct it.
-        // if we did, we might get an outdated value.
-        data.h = this.player().heading;
+      data = this._translateData(data);
+      if(data.id == this._playerId) {
+        delete data.heading;
       }
-      this.players[data.i].update(data);
-      this.players[data.i].refresh();
+      this.players[data.id].update(data);
+      this.players[data.id].refresh();
     }
 
   }
@@ -217,24 +286,21 @@ WW3.prototype = {
 };
 
 var WW3Player = function(data) {
+  this._predicted = null;
   this._li = null;
-  this._sprite = null;
 
-  if(typeof data != 'undefined') {
+  if(typeof data == 'object') {
     this.update(data);
   }
 };
 
 WW3Player.prototype = {
+  
   update: function(data) {
     this.updated = new Date();
-    this.id = data.i;
-    this.x = data.x;
-    this.y = data.y;
-    this.heading = data.h;
-    this.speed = data.s;
-    this.direction = data.d;
-    this.latency = data.l;
+    for(var attr in data) {
+      this[attr] = data[attr];
+    }
   },
 
   refresh: function() {
@@ -245,4 +311,5 @@ WW3Player.prototype = {
       );
     }
   }
+
 };

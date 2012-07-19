@@ -277,13 +277,20 @@ WW3.prototype = {
     },
 
     // updates player data
-    data: function(data) {
-      data = this._translateData(data);
-      if(data.id == this._playerId) {
-        delete data.heading;
+    data: function(datas) {
+      if(!(datas instanceof Array)) {
+        datas = [datas];
       }
-      this.players[data.id].update(data);
-      this.players[data.id].refresh();
+
+      for(var i = 0; i < datas.length; i++) {
+        var data = this._translateData(datas[i]);
+        if(data.id == this._playerId) {
+          // we are the authority on our ownheading, so we always have the most up-to-date value
+          delete data.heading;
+        }
+        this.players[data.id].update(data);
+        this.players[data.id].refresh();
+      }
     }
 
   }

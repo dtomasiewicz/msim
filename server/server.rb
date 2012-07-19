@@ -99,6 +99,10 @@ class World
     @avatars[client]
   end
 
+  def broadcast_state
+    notify_all :data, @avatars.values.map(&:data)
+  end
+
   def react_info(avatar)
     [:success, @width, @height, @avatars.values.map(&:data), avatar.id]
   end
@@ -156,5 +160,8 @@ server.each_seconds 3, preemptive: false do
       avatar.latency = Time.now-start
     end
   end
+end
+server.each_ticks 100 do
+  world.broadcast_state
 end
 server.start

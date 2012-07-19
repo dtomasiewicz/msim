@@ -76,14 +76,14 @@ WW3.prototype = {
   },
 
   _addPlayer: function(player) {
-    this.players[player.id] = player;
+    this.players[player.get('id')] = player;
     player._li = $('<li></li>').get();
     $(this.display.players).append(player._li);
     player.refresh();
   },
 
   _removePlayer: function(player) {
-    delete this.players[player.id];
+    delete this.players[player.get('id')];
     $(player._li).remove();
   },
 
@@ -121,8 +121,6 @@ WW3.prototype = {
             } else {
               self._gamz.act('backward');
             }
-          } else {
-            self._computeHeading();
           }
         }
       }
@@ -157,32 +155,35 @@ WW3.prototype = {
       self._redraw();
       setTimeout(redraw, self.REDRAW_FREQUENCY);
     })();
+
+    var ch;
+    (ch = function() {
+      self._computeHeading();
+      setTimeout(ch, self.ROTATE_FREQUENCY);
+    })();
   },
 
   // computes new heading periodically while left/right is pressed
   _computeHeading: function() {
-    var player = this.player();
-    // invert turning while backing up
-    var direction = player.direction == -1 ? -1 : 1;
-
     if(this._keys[KeyCodes.LEFT] || this._keys[KeyCodes.RIGHT]) {
+      var player = this.player();
+      // invert turning while backing up
+      var direction = player.get('direction') == -1 ? -1 : 1;
       if(this._keys[KeyCodes.LEFT]) {
         if(!this._keys[KeyCodes.RIGHT]) {
           // adjust it before receive a response so that subsequent headings are
           // added to THIS one (results in uniform rotation)
-          player.heading = WW3.mod(player.heading-this.ROTATE_DELTA*direction, 1.0);
-          this._gamz.act('heading', player.heading);
+          this._predict(this.player());
+          player.set('heading', WW3.mod(player.get('heading')-this.ROTATE_DELTA*direction, 1.0));
+          this._gamz.act('heading', player.get('heading'));
         } else {
           // both pressed-- maintain heading
         }
       } else {
-        player.heading = WW3.mod(player.heading+this.ROTATE_DELTA*direction, 1.0);
-        this._gamz.act('heading', player.heading);
+        this._predict(this.player());
+        player.set('heading', WW3.mod(player.get('heading')+this.ROTATE_DELTA*direction, 1.0));
+        this._gamz.act('heading', player.get('heading'));
       }
-      var self = this;
-      setTimeout(function() {
-        self._computeHeading();
-      }, this.ROTATE_FREQUENCY);
     }
   },
 
@@ -190,7 +191,7 @@ WW3.prototype = {
     // only draw if loaded
     if(this._playerId === null) return;
 
-    var predictor = this['_predict_'+this.prediction];
+    var predictor = this._predictor();
 
     var ctx = this.display.canvas.getContext('2d');
     ctx.clearRect(0, 0, this.display.canvas.width, this.display.canvas.height);
@@ -198,13 +199,14 @@ WW3.prototype = {
     ctx.fillStyle = 'black';
     for(var id in this.players) {
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
-      this._drawPlayer(ctx, predictor.call(this, this.players[id]));
+      predictor.call(this, this.players[id])
+      this._drawPlayer(ctx, this.players[id]);
     }
   },
 
   _drawPlayer: function(ctx, player) {
     // floor so that we always get a value on the canvas
-    var h = player.heading*2*Math.PI;
+    var h = player.get('heading')*2*Math.PI;
 
     // TODO constants/options?
     var radius = 5;
@@ -212,39 +214,42 @@ WW3.prototype = {
 
     ctx.beginPath();
     // semi-circle
-    ctx.arc(Math.floor(player.x), Math.floor(player.y), radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
+    ctx.arc(Math.floor(player.get('x')), Math.floor(player.get('y')), radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
     // first side of the point
     var x_ = Math.cos(2*Math.PI - h)*point;
     var y_ = Math.sin(2*Math.PI - h)*point;
-    ctx.lineTo(Math.floor(player.x + x_), Math.floor(player.y - y_));
+    ctx.lineTo(Math.floor(player.get('x') + x_), Math.floor(player.get('y') - y_));
     // second side of the point
     ctx.closePath();
     ctx.fill();
   },
 
+  _predictor: function() {
+    return this['_predict_'+this.prediction];
+  },
+
+  _predict: function(player) {
+    this._predictor().call(this, player);
+  },
+
   _predict_none: function(player) {
-    return player;
+    player._predicted = {};
   },
 
   _predict_extrapolate: function(player) {
-    // use previously predicted values if present and not outdated
-    var base = player._predicted > player.updated ? player._predicted : player;
-
     // extrapolate distance travelled since last update
-    var dist = player.speed*(new Date() - player.updated)/1000;
+    var disp = player.get('direction')*player.get('speed')*(new Date() - player.get('updated'))/1000;
 
-    return player._predicted = {
-      direction: player.direction,
-      heading: player.heading,
-      x: WW3.mod(player.x + dist*Math.cos(player.heading*2*Math.PI)*player.direction, this.width()),
-      y: WW3.mod(player.y + dist*Math.sin(player.heading*2*Math.PI)*player.direction, this.height()),
+    player._predicted = {
+      x: WW3.mod(player.get('x') + disp*Math.cos(player.get('heading')*2*Math.PI), this.width()),
+      y: WW3.mod(player.get('y') + disp*Math.sin(player.get('heading')*2*Math.PI), this.height()),
       updated: new Date()
     };
   },
 
   _predict_interpolate: function(player) {
     // TODO
-    return this._predict_extrapolate(player);
+    this._predict_extrapolate(player);
   },
 
   // translates condensed (wire) formatted player attributes to the format used
@@ -264,7 +269,7 @@ WW3.prototype = {
   _notifyHandlers: {
 
     connect: function(player) {
-      this._addPlayer(new WW3Player(player));
+      this._addPlayer(new WW3Player(this._translateData(player)));
     },
 
     disconnect: function(player) {
@@ -286,7 +291,8 @@ WW3.prototype = {
 };
 
 var WW3Player = function(data) {
-  this._predicted = null;
+  this._real = {};
+  this._predicted = {};
   this._li = null;
 
   if(typeof data == 'object') {
@@ -295,19 +301,29 @@ var WW3Player = function(data) {
 };
 
 WW3Player.prototype = {
+
+  get: function(attr, real) {
+    return !real && attr in this._predicted ? this._predicted[attr] : this._real[attr];
+  },
+
+  set: function(attr, value) {
+    this._real[attr] = value;
+    delete this._predicted[attr];
+  },
   
   update: function(data) {
-    this.updated = new Date();
+    this._real['updated'] = new Date();
     for(var attr in data) {
-      this[attr] = data[attr];
+      this._real[attr] = data[attr];
     }
+    this._predicted = {};
   },
 
   refresh: function() {
     if(this._li) {
       $(this._li).text(
-        this.id+' ('+this.x+', '+this.y+') @ '+
-        (Math.round(this.heading*10)/10)+', lat '+Math.round(this.latency*1000)+' ms'
+        this.get('id')+' ('+this.get('x')+', '+this.get('y')+') @ '+
+        (Math.round(this.get('heading')*10)/10)+', lat '+Math.round(this.get('latency')*1000)+' ms'
       );
     }
   }

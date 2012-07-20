@@ -174,7 +174,7 @@ class World
 
 end
 
-world = World.new 1000, 600
+world = World.new 640, 480
 server = Gamz::Server.new world
 server.listen 10000
 server.listen_ws 10001

@@ -56,10 +56,11 @@ class Avatar
     # apply to an arc if rotating
     dx = dy = dh = 0.0
     if @rot_speed != 0.0
-      dh = @rot_speed*elapsed
+      dh = @rot_speed*elapsed # dh = arc angle
       radius = @speed/@rot_speed
-      dx = @direction * radius * (Math.sin(dh-@heading) + Math.sin(@heading))
-      dy = @direction * radius * (Math.cos(dh-@heading) - Math.cos(@heading))
+      l = Math::PI/2-@heading-dh
+      dx = @direction * radius * (Math.cos(l) - Math.sin(@heading))
+      dy = @direction * radius * (Math.cos(@heading) - Math.sin(l))
     else
       disp = @direction*@speed*elapsed
       dx = disp*Math.cos(@heading);
@@ -145,13 +146,13 @@ class World
 
   def react_heading(avatar, heading)
     avatar.heading = heading.to_f % 1.0
-    notify_except avatar, :data, avatar.data
+    notify_all :data, avatar.data
     :success
   end
 
   def react_rotate(avatar, speed)
     avatar.rot_speed = speed.to_f
-    notify_except avatar, :data, avatar.data
+    notify_all :data, avatar.data
     :success
   end
 
@@ -173,7 +174,7 @@ class World
 
 end
 
-world = World.new 400, 300
+world = World.new 1000, 600
 server = Gamz::Server.new world
 server.listen 10000
 server.listen_ws 10001

@@ -252,8 +252,9 @@ WW3.prototype = {
       dh = player.get('rot_speed')*dTime;
       var radius = player.get('speed')/player.get('rot_speed');
       var h = player.get('heading');
-      dx = player.get('direction') * radius * (Math.sin(dh-h) + Math.sin(h));
-      dy = player.get('direction') * radius * (Math.cos(dh-h) - Math.cos(h));
+      var l = Math.PI/2-h-dh;
+      dx = player.get('direction') * radius * (Math.cos(l) - Math.sin(h));
+      dy = player.get('direction') * radius * (Math.cos(h) - Math.sin(l));
     } else {
       var disp = player.get('direction')*player.get('speed')*dTime;
       dx = disp*Math.cos(player.get('heading'));
@@ -347,6 +348,7 @@ WW3Player.prototype = {
   },
   
   update: function(data) {
+    console.log('updating');
     this._real['updated'] = new Date();
     for(var attr in data) {
       this._real[attr] = data[attr];

@@ -30,6 +30,8 @@ var WW3 = function(options) {
   }
 
   this.prediction = 'prediction' in options ? options.prediction : 'interpolate';
+  this.rot_speed = 'rot_speed' in options ? options.rot_speed : Math.PI;
+  this.redraw_rate = 'redraw_rate' in options ? options.redraw_rate : 25;
 
   this.players = null;
   this._playerId = null;
@@ -59,10 +61,6 @@ WW3.mod = function(a, b) {
 
 WW3.prototype = {
 
-  ROTATE_DELTA: 0.05,
-  ROTATE_FREQUENCY: 100,
-  REDRAW_FREQUENCY: 25,
-
   player: function() {
     return this.players[this._playerId];
   },
@@ -79,7 +77,6 @@ WW3.prototype = {
     this.players[player.get('id')] = player;
     player._li = $('<li></li>').get();
     $(this.display.players).append(player._li);
-    player.refresh();
   },
 
   _removePlayer: function(player) {
@@ -97,7 +94,7 @@ WW3.prototype = {
 
       self.players = {};
       for(var i = 0; i < players.length; i++) {
-        self._addPlayer(new WW3Player(self._translateData(players[i])));
+        self._addPlayer(new WW3Player(self, self._translateData(players[i])));
       }
     });
 
@@ -105,22 +102,26 @@ WW3.prototype = {
       if(KeyCodes.isArrow(e.keyCode)) {
         e.preventDefault();
 
+        // some browsers fire keydown for each "press"-- we only want the first
         if(!self._keys[e.keyCode]) {
           self._keys[e.keyCode] = true;
 
-          // some browsers fire keydown for each "press"-- we only want the first
           if(e.keyCode == KeyCodes.UP) {
             if(self._keys[KeyCodes.DOWN]) {
-              self._gamz.act('stop');
+              self._stop();
             } else {
-              self._gamz.act('forward');
+              self._forward();
             }
           } else if(e.keyCode == KeyCodes.DOWN) {
             if(self._keys[KeyCodes.UP]) {
-              self._gamz.act('stop');
+              self._stop();
             } else {
-              self._gamz.act('backward');
+              self._backward();
             }
+          } else if(e.keyCode == KeyCodes.LEFT) {
+            self._rotate(self._keys[KeyCodes.RIGHT] ? 0 : -1);
+          } else {
+            self._rotate(self._keys[KeyCodes.LEFT] ? 0 : 1);
           }
         }
       }
@@ -135,16 +136,20 @@ WW3.prototype = {
 
           if(e.keyCode == KeyCodes.UP) {
             if(self._keys[KeyCodes.DOWN]) {
-              self._gamz.act('backward');
+              self._backward();
             } else {
-              self._gamz.act('stop');
+              self._stop();
             }
           } else if(e.keyCode == KeyCodes.DOWN) {
             if(self._keys[KeyCodes.UP]) {
-              self._gamz.act('forward');
+              self._forward();
             } else {
-              self._gamz.act('stop');
+              self._stop();
             }
+          } else if(e.keyCode == KeyCodes.LEFT) {
+            self._rotate(self._keys[KeyCodes.RIGHT] ? 1 : 0);
+          } else {
+            self._rotate(self._keys[KeyCodes.LEFT] ? -1 : 0);
           }
         }
       }
@@ -153,38 +158,33 @@ WW3.prototype = {
     var redraw;
     (redraw = function () {
       self._redraw();
-      setTimeout(redraw, self.REDRAW_FREQUENCY);
-    })();
-
-    var ch;
-    (ch = function() {
-      self._computeHeading();
-      setTimeout(ch, self.ROTATE_FREQUENCY);
+      setTimeout(redraw, self.redraw_rate);
     })();
   },
 
-  // computes new heading periodically while left/right is pressed
-  _computeHeading: function() {
-    if(this._keys[KeyCodes.LEFT] || this._keys[KeyCodes.RIGHT]) {
-      var player = this.player();
-      // invert turning while backing up
-      var direction = player.get('direction') == -1 ? -1 : 1;
-      if(this._keys[KeyCodes.LEFT]) {
-        if(!this._keys[KeyCodes.RIGHT]) {
-          // adjust it before receive a response so that subsequent headings are
-          // added to THIS one (results in uniform rotation)
-          this._predict(this.player());
-          player.set('heading', WW3.mod(player.get('heading')-this.ROTATE_DELTA*direction, 1.0));
-          this._gamz.act('heading', player.get('heading'));
-        } else {
-          // both pressed-- maintain heading
-        }
-      } else {
-        this._predict(this.player());
-        player.set('heading', WW3.mod(player.get('heading')+this.ROTATE_DELTA*direction, 1.0));
-        this._gamz.act('heading', player.get('heading'));
-      }
-    }
+  _backward: function() {
+    this._predict(this.player());
+    this.player().set('direction', -1);
+    this._gamz.act('backward');
+  },
+
+  _forward: function() {
+    this._predict(this.player());
+    this.player().set('direction', 1);
+    this._gamz.act('forward');
+  },
+
+  _stop: function() {
+    this._predict(this.player());
+    this.player().set('direction', 0);
+    this._gamz.act('stop');
+  },
+
+  // direction: 1=CCW, -1=CW, 0=none
+  _rotate: function(direction) {
+    this._predict(this.player());
+    this.player().set('rot_speed', direction*this.rot_speed);
+    this._gamz.act('rotate', this.player().get('rot_speed'));
   },
 
   _redraw: function() {
@@ -198,15 +198,18 @@ WW3.prototype = {
 
     ctx.fillStyle = 'black';
     for(var id in this.players) {
+      var player = this.players[id];
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
-      predictor.call(this, this.players[id])
-      this._drawPlayer(ctx, this.players[id]);
+      predictor.call(this, player)
+      this._drawPlayer(ctx, player);
+      player.refresh();
     }
   },
 
   _drawPlayer: function(ctx, player) {
-    // floor so that we always get a value on the canvas
-    var h = player.get('heading')*2*Math.PI;
+    var h = player.get('heading');
+    var x = player.x_int();
+    var y = player.y_int();
 
     // TODO constants/options?
     var radius = 5;
@@ -214,11 +217,11 @@ WW3.prototype = {
 
     ctx.beginPath();
     // semi-circle
-    ctx.arc(Math.floor(player.get('x')), Math.floor(player.get('y')), radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
+    ctx.arc(x, y, radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
     // first side of the point
     var x_ = Math.cos(2*Math.PI - h)*point;
     var y_ = Math.sin(2*Math.PI - h)*point;
-    ctx.lineTo(Math.floor(player.get('x') + x_), Math.floor(player.get('y') - y_));
+    ctx.lineTo(x + x_, y - y_);
     // second side of the point
     ctx.closePath();
     ctx.fill();
@@ -236,14 +239,32 @@ WW3.prototype = {
     player._predicted = {};
   },
 
+  // TODO- consider rot_speed
   _predict_extrapolate: function(player) {
     // extrapolate distance travelled since last update
-    var disp = player.get('direction')*player.get('speed')*(new Date() - player.get('updated'))/1000;
+    var now = new Date();
+    var dTime = (now - player.get('updated'))/1000;
+
+    // apply this to an arc if rotating
+    var dx = 0.0, dy = 0.0, dh = 0.0;
+    if(player.get('rot_speed') != 0.0) {
+      // dh = arc angle
+      dh = player.get('rot_speed')*dTime;
+      var radius = player.get('speed')/player.get('rot_speed');
+      var h = player.get('heading');
+      dx = player.get('direction') * radius * (Math.sin(dh-h) + Math.sin(h));
+      dy = player.get('direction') * radius * (Math.cos(dh-h) - Math.cos(h));
+    } else {
+      var disp = player.get('direction')*player.get('speed')*dTime;
+      dx = disp*Math.cos(player.get('heading'));
+      dy = disp*Math.sin(player.get('heading'));
+    }
 
     player._predicted = {
-      x: WW3.mod(player.get('x') + disp*Math.cos(player.get('heading')*2*Math.PI), this.width()),
-      y: WW3.mod(player.get('y') + disp*Math.sin(player.get('heading')*2*Math.PI), this.height()),
-      updated: new Date()
+      x: WW3.mod(player.get('x') + dx, this.width()),
+      y: WW3.mod(player.get('y') + dy, this.height()),
+      heading: WW3.mod(player.get('heading') + dh, 2*Math.PI),
+      updated: now
     };
   },
 
@@ -259,9 +280,10 @@ WW3.prototype = {
     if('i' in wire) data.id = wire.i;
     if('x' in wire) data.x = wire.x;
     if('y' in wire) data.y = wire.y;
-    if('h' in wire) data.heading = wire.h;
-    if('s' in wire) data.speed = wire.s;
     if('d' in wire) data.direction = wire.d;
+    if('s' in wire) data.speed = wire.s;
+    if('r' in wire) data.rot_speed = wire.r;
+    if('h' in wire) data.heading = wire.h;
     if('l' in wire) data.latency = wire.l;
     return data;
   },
@@ -269,7 +291,7 @@ WW3.prototype = {
   _notifyHandlers: {
 
     connect: function(player) {
-      this._addPlayer(new WW3Player(this._translateData(player)));
+      this._addPlayer(new WW3Player(this, this._translateData(player)));
     },
 
     disconnect: function(player) {
@@ -284,12 +306,8 @@ WW3.prototype = {
 
       for(var i = 0; i < datas.length; i++) {
         var data = this._translateData(datas[i]);
-        if(data.id == this._playerId) {
-          // we are the authority on our ownheading, so we always have the most up-to-date value
-          delete data.heading;
-        }
+        // TODO- we might want to remove our own heading/rot_speed once again?
         this.players[data.id].update(data);
-        this.players[data.id].refresh();
       }
     }
 
@@ -297,7 +315,9 @@ WW3.prototype = {
 
 };
 
-var WW3Player = function(data) {
+var WW3Player = function(game, data) {
+  this.game = game;
+
   this._real = {};
   this._predicted = {};
   this._li = null;
@@ -308,6 +328,14 @@ var WW3Player = function(data) {
 };
 
 WW3Player.prototype = {
+
+  x_int: function() {
+    return WW3.mod(Math.round(this.get('x')), this.game.width());
+  },
+
+  y_int: function() {
+    return WW3.mod(Math.round(this.get('y')), this.game.height());
+  },
 
   get: function(attr, real) {
     return !real && attr in this._predicted ? this._predicted[attr] : this._real[attr];
@@ -329,8 +357,10 @@ WW3Player.prototype = {
   refresh: function() {
     if(this._li) {
       $(this._li).text(
-        this.get('id')+' ('+this.get('x')+', '+this.get('y')+') @ '+
-        (Math.round(this.get('heading')*10)/10)+', lat '+Math.round(this.get('latency')*1000)+' ms'
+        '#'+this.get('id')+' ('+Math.round(this.get('x'))+', '+Math.round(this.get('y'))+') rot '+
+        (Math.round(this.get('heading')*10)/10)+' rad @ '+
+        (Math.round(this.get('rot_speed')*10)/10)+' rad/s, lat '+
+        Math.round(this.get('latency')*1000)+' ms'
       );
     }
   }

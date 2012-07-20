@@ -3,7 +3,7 @@ require 'gamz/server'
 
 class Avatar
 
-  attr_reader :id, :client, :direction, :x, :y, :heading, :speed
+  attr_reader :id, :client, :direction, :x, :y, :heading, :speed, :rot_speed
   attr_accessor :latency
 
   def initialize(world, id)
@@ -11,24 +11,24 @@ class Avatar
     @id = id
     @direction = 0
     @x, @y = 0, 0
-    @heading = 0.0 # radians/(2pi) .. [0.0, 1.0)
+    @heading = 0.0 # radians
+    @rot_speed = 0.0
     @speed = 200 # per second
+    @updated = Time.now
   end
 
   def forward!
     compute!
     @direction = 1
-    @move_start = Time.now
   end
 
   def backward!
     compute!
     @direction = -1
-    @move_start = Time.now
   end
 
   def stop!
-    compute! true
+    compute!
     @direction = 0
   end
 
@@ -37,21 +37,39 @@ class Avatar
     @heading = heading
   end
 
+  def rot_speed=(rot_speed)
+    compute!
+    @rot_speed = rot_speed
+  end
+
   def data
-    {i: @id, x: @x, y: @y, h: @heading, s: @speed, d: @direction, l: @latency}
+    {i: @id, x: @x, y: @y, d: @direction, s: @speed, r: @rot_speed, h: @heading, l: @latency}
   end
 
   private
 
   # computes the current coordinates
-  def compute!(stop = false)
-    if @move_start
-      now = Time.now
-      dist = speed*(now - @move_start)
-      @x = (@x + (dist*Math.cos(heading*2*Math::PI)*direction).round) % @world.width
-      @y = (@y + (dist*Math.sin(heading*2*Math::PI)*direction).round) % @world.height
-      @move_start = stop ? nil : now
+  def compute!
+    now = Time.now
+    elapsed = now-@updated
+
+    # apply to an arc if rotating
+    dx = dy = dh = 0.0
+    if @rot_speed != 0.0
+      dh = @rot_speed*elapsed
+      radius = @speed/@rot_speed
+      dx = @direction * radius * (Math.sin(dh-@heading) + Math.sin(@heading))
+      dy = @direction * radius * (Math.cos(dh-@heading) - Math.cos(@heading))
+    else
+      disp = @direction*@speed*elapsed
+      dx = disp*Math.cos(@heading);
+      dy = disp*Math.sin(@heading);
     end
+
+    @x = (@x + dx) % @world.width
+    @y = (@y + dy) % @world.height
+    @heading = (@heading + dh) % (2*Math::PI)
+    @updated = now
   end
 
 end
@@ -127,7 +145,13 @@ class World
 
   def react_heading(avatar, heading)
     avatar.heading = heading.to_f % 1.0
-    notify_all :data, avatar.data
+    notify_except avatar, :data, avatar.data
+    :success
+  end
+
+  def react_rotate(avatar, speed)
+    avatar.rot_speed = speed.to_f
+    notify_except avatar, :data, avatar.data
     :success
   end
 

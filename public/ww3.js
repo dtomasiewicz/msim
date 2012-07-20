@@ -348,7 +348,6 @@ WW3Player.prototype = {
   },
   
   update: function(data) {
-    console.log('updating');
     this._real['updated'] = new Date();
     for(var attr in data) {
       this._real[attr] = data[attr];

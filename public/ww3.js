@@ -204,7 +204,7 @@ WW3.prototype = {
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
 
       var player = this.players[id];
-      player.predict();
+      player.predict().correct();
       this._drawPlayer(ctx, player);
       player.refresh();
     }

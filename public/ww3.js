@@ -317,7 +317,7 @@ WW3Player.prototype = {
   correct: function(speed, rot_speed) {
     if(this._error) {
       var now = new Date();
-      var dTime = now - this._corrected;
+      var dTime = (now - this._corrected)/1000;
 
       var dx = WW3.graduate(this._error.x, speed*dTime);
       var dy = WW3.graduate(this._error.y, speed*dTime);

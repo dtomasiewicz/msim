@@ -279,6 +279,8 @@ var WW3Player = function(game, data) {
   this._li = null;
 };
 
+var maxDx = 0, maxDy = 0;
+
 WW3Player.prototype = {
 
   x_int: function() {
@@ -328,6 +330,10 @@ WW3Player.prototype = {
       var dx = WW3.graduate(this._error.x, speed*dTime);
       var dy = WW3.graduate(this._error.y, speed*dTime);
       var dh = WW3.graduate(this._error.h, rot_speed*dTime);
+      maxDx = Math.max(maxDx, dx);
+      maxDy = Math.max(maxDy, dy);
+      console.log('max dx = '+maxDx);
+      console.log('max dy = '+maxDy);
 
       this.x = this.game.xPos(this.x + dx);
       this._error.x -= dx;
@@ -337,7 +343,7 @@ WW3Player.prototype = {
 
       this.heading = WW3.mod(this.heading + dh, 2*Math.PI);
       this._error.h -= dh;
-      
+
       this._corrected = now;
     }
 

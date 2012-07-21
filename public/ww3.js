@@ -56,8 +56,8 @@ WW3.graduate = function(value, delta) {
   return Math.abs(value) > delta ? delta*sign : value;
 };
 
-WW3.CORRECT_SPEED = 200;
-WW3.CORRECT_ROT_SPEED = Math.PI;
+WW3.CORRECT_SPEED = 100;
+WW3.CORRECT_ROT_SPEED = Math.PI/2;
 
 WW3.prototype = {
 

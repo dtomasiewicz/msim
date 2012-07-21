@@ -51,6 +51,11 @@ WW3.mod = function(a, b) {
   return ((a%b)+b)%b;
 };
 
+WW3.graduate = function(value, delta) {
+  var sign = Math.round(value/Math.abs(value));
+  return Math.abs(value) > delta ? delta*sign : value;
+};
+
 WW3.prototype = {
 
   player: function() {
@@ -330,9 +335,9 @@ WW3Player.prototype = {
     var delta = WW3Player.extrapolate(this, (now - this.updated)/1000);
 
     var correct = {
-      x: Math.abs(this._error.x) > 2 ? this._error.x*0.5 : this._error.x,
-      y: Math.abs(this._error.y) > 2 ? this._error.y*0.5 : this._error.y,
-      h: Math.abs(this._error.h) > (Math.PI*0.1) ? this._error.h*0.5 : this._error.h
+      x: WW3.graduate(this._error.x, 2),
+      y: WW3.graduate(this._error.y, 2),
+      h: WW3.graduate(this._error.h, Math.PI*0.1)
     };
     
     this.x = this.game.xPos(this.x + delta.dX + correct.x);

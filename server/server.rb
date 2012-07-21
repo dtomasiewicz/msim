@@ -53,22 +53,29 @@ class Avatar
     now = Time.now
     elapsed = now-@updated
 
-    # apply to an arc if rotating
     dx = dy = dh = 0.0
+    sin_h, cos_h = Math.sin(@heading), Math.cos(@heading)
+
     if @rot_speed != 0.0
-      dh = @rot_speed*elapsed # dh = arc angle
-      radius = @speed/@rot_speed
-      l = Math::PI/2-@heading-dh
-      dx = @direction * radius * (Math.cos(l) - Math.sin(@heading))
-      dy = @direction * radius * (Math.cos(@heading) - Math.sin(l))
+      dh = @rot_speed*elapsed
+
+      # if moving, apply to an arc; dh is arc angle
+      if @direction != 0
+        # invert turning when going backwards (more intuitive)
+        dh *= @direction
+        radius = @speed/@rot_speed
+        l = Math::PI/2-@heading-dh
+        dx = radius * (Math.cos(l) - sin_h)
+        dy = radius * (cos_h - Math.sin(l))
+      end
     else
       disp = @direction*@speed*elapsed
-      dx = disp*Math.cos(@heading);
-      dy = disp*Math.sin(@heading);
+      dx = disp*cos_h;
+      dy = disp*sin_h;
     end
 
-    @x = (@x + dx) % @world.width
-    @y = (@y + dy) % @world.height
+    @x = [0.0, [@world.width.to_f, @x + dx].min].max
+    @y = [0.0, [@world.height.to_f, @y + dy].min].max
     @heading = (@heading + dh) % (2*Math::PI)
     @updated = now
   end
@@ -145,7 +152,7 @@ class World
   end
 
   def react_heading(avatar, heading)
-    avatar.heading = heading.to_f % 1.0
+    avatar.heading = heading.to_f % (2*Math::PI)
     notify_all :data, avatar.data
     :success
   end

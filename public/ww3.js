@@ -65,17 +65,25 @@ WW3.prototype = {
     return this.display.canvas.height;
   },
 
+  xPos: function(x) {
+    return Math.max(0, Math.min(this.width(), x));
+  },
+
+  yPos: function(y) {
+    return Math.max(0, Math.min(this.height(), y));
+  },
+
   _addPlayer: function(player) {
-    this.players[player.get('id')] = player;
+    this.players[player.id] = player;
     player._li = $('<li></li>').get(0);
-    if(player.get('id') == this._playerId) {
+    if(player.id == this._playerId) {
       player._li.style.color = '#00f';
     }
     $(this.display.players).append(player._li);
   },
 
   _removePlayer: function(player) {
-    delete this.players[player.get('id')];
+    delete this.players[player.id];
     $(player._li).remove();
   },
 
@@ -89,7 +97,9 @@ WW3.prototype = {
 
       self.players = {};
       for(var i = 0; i < players.length; i++) {
-        self._addPlayer(new WW3Player(self, players[i]));
+        var data = WW3Player.normalizeData(players[i]);
+        data.updated = new Date();
+        self._addPlayer(new WW3Player(self, data));
       }
     });
 
@@ -158,24 +168,24 @@ WW3.prototype = {
   },
 
   _backward: function() {
-    this.player().predict().set('direction', -1);
+    this.player().predict().direction = -1;
     this._gamz.act('backward');
   },
 
   _forward: function() {
-    this.player().predict().set('direction', 1);
+    this.player().predict().direction = 1;
     this._gamz.act('forward');
   },
 
   _stop: function() {
-    this.player().predict().set('direction', 0);
+    this.player().predict().direction = 0;
     this._gamz.act('stop');
   },
 
   // direction: 1=CCW, -1=CW, 0=none
   _rotate: function(direction) {
-    this.player().predict().set('rot_speed', direction*this.rot_speed);
-    this._gamz.act('rotate', this.player().get('rot_speed'));
+    this.player().predict().rot_speed = direction*this.rot_speed;
+    this._gamz.act('rotate', this.player().rot_speed);
   },
 
   _redraw: function() {
@@ -197,7 +207,7 @@ WW3.prototype = {
   },
 
   _drawPlayer: function(ctx, player) {
-    var h = player.get('heading');
+    var h = player.heading;
     var x = player.x_int();
     var y = player.y_int();
 
@@ -219,8 +229,10 @@ WW3.prototype = {
 
   _notifyHandlers: {
 
-    connect: function(player) {
-      this._addPlayer(new WW3Player(this, player));
+    connect: function(data) {
+      data = WW3Player.normalizeData(data);
+      data.updated = new Date();
+      this._addPlayer(new WW3Player(this, data));
     },
 
     disconnect: function(player) {
@@ -234,8 +246,14 @@ WW3.prototype = {
       }
 
       for(var i = 0; i < datas.length; i++) {
-        // TODO- we might want to remove our own heading/rot_speed once again?
-        this.players[datas[i].i].update(datas[i]);
+        var data = WW3Player.normalizeData(datas[i]);
+        this.players[data.id].interpolate(data, this.player().latency);
+
+        if(data.id == this._playerId) {
+          this.player().latency = data.latency;
+        } else {
+          this.players[data.id].update(data);
+        }
       }
     }
 
@@ -246,51 +264,51 @@ WW3.prototype = {
 var WW3Player = function(game, data) {
   this.game = game;
 
-  this._real = {};
-  this._predicted = {};
-  this._li = null;
-
-  if(typeof data == 'object') {
-    this.update(data);
+  for(var attr in data) {
+    this[attr] = data[attr];
   }
+
+  this._error = {x: 0, y: 0};
+  this._li = null;
 };
 
 WW3Player.prototype = {
 
   x_int: function() {
-    return WW3.mod(Math.round(this.get('x')), this.game.width());
+    return this.game.xPos(Math.round(this.x));
   },
 
   y_int: function() {
-    return WW3.mod(Math.round(this.get('y')), this.game.height());
+    return this.game.yPos(Math.round(this.y));
   },
 
-  get: function(attr, real) {
-    return !real && attr in this._predicted ? this._predicted[attr] : this._real[attr];
-  },
-
-  set: function(attr, value) {
-    this._real[attr] = value;
-    delete this._predicted[attr];
+  update: function(data) {
+    for(var attr in data) {
+      if(attr != 'x' && attr != 'y') {
+        this[attr] = data[attr];
+      }
+    }
   },
   
-  update: function(data) {
-    data = WW3Player.normalizeData(data);
-    this._real['updated'] = new Date();
-    for(var attr in data) {
-      this._real[attr] = data[attr];
-    }
-    this._predicted = {};
+  interpolate: function(data, latency) {
+    var local = WW3Player.extrapolate(this, (new Date() - this.updated)/1000);
+    var remote = WW3Player.extrapolate(data, latency);
+
+    this._error = {
+      x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x + local.dX),
+      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y + local.dY)
+    };
+
     return this;
   },
 
   refresh: function() {
     if(this._li) {
       $(this._li).text(
-        '#'+this.get('id')+' ('+Math.round(this.get('x'))+', '+Math.round(this.get('y'))+') rot '+
-        (Math.round(this.get('heading')*10)/10)+' rad @ '+
-        (Math.round(this.get('rot_speed')*10)/10)+' rad/s, lat '+
-        Math.round(this.get('latency')*1000)+' ms'
+        '#'+this.id+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
+        (Math.round(this.heading*10)/10)+' rad @ '+
+        (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
+        Math.round(this.latency*1000)+' ms'
       );
     }
     return this;
@@ -298,35 +316,77 @@ WW3Player.prototype = {
 
   predict: function() {
     var now = new Date();
-    this._predicted = this.extrapolate((now - this.get('updated'))/1000);
-    this._predicted['updated'] = now;
-    return this;
-  },
+    
+    var delta = WW3Player.extrapolate(this, (now - this.updated)/1000);
 
-  extrapolate: function(dTime) {
-    var dx = 0.0, dy = 0.0, dh = 0.0;
-
-    if(this.get('rot_speed') != 0.0) {
-      // apply to an arc if rotating
-      dh = this.get('rot_speed')*dTime; // dh = arc angle (theta)
-      var radius = this.get('speed')/this.get('rot_speed');
-      var h = this.get('heading');
-      var l = Math.PI/2-h-dh;
-      dx = this.get('direction') * radius * (Math.cos(l) - Math.sin(h));
-      dy = this.get('direction') * radius * (Math.cos(h) - Math.sin(l));
-    } else {
-      var disp = this.get('direction')*this.get('speed')*dTime;
-      dx = disp*Math.cos(this.get('heading'));
-      dy = disp*Math.sin(this.get('heading'));
-    }
-
-    return {
-      x: WW3.mod(this.get('x') + dx, this.game.width()),
-      y: WW3.mod(this.get('y') + dy, this.game.height()),
-      heading: WW3.mod(this.get('heading') + dh, 2*Math.PI)
+    var correct = {
+      x: Math.abs(this._error.x) > 2 ? this._error.x*0.5 : this._error.x,
+      y: Math.abs(this._error.y) > 2 ? this._error.y*0.5 : this._error.y
     };
+    
+    this.x = this.game.xPos(this.x + delta.dX + correct.x);
+    this._error.x -= correct.x;
+
+    this.y = this.game.yPos(this.y + delta.dY + correct.y);
+    this._error.y -= correct.y;
+
+    this.heading = WW3.mod(this.heading + delta.dHeading, 2*Math.PI);
+    this.updated = now;
+    
+    return this;
   }
 
+};
+
+// given initial position/movement information, approximates the position
+// and heading deltas after a given dTime seconds have elapsed.
+//
+//   initial = {
+//     rot_speed: number rad/s
+//     speed: number pix/s
+//     heading: number rad
+//     direction: 1 (forward), 0 (stationary), or -1 (backward)
+//     x: number pixels
+//     y: number pixels
+//   }
+//
+//   dTime = number seconds
+//
+//   return = {
+//     dX: number pixels
+//     dY: number pixels
+//     dHeading: number rad
+//   }
+//
+WW3Player.extrapolate = function(initial, dTime) {
+  var deltas = {
+    dX: 0.0,
+    dY: 0.0,
+    dHeading: 0.0
+  };
+
+  var sinH = Math.sin(initial.heading);
+  var cosH = Math.cos(initial.heading);
+
+  if(initial.rot_speed != 0.0) {
+    deltas.dHeading = initial.rot_speed*dTime;
+
+    // if moving, apply to an arc; dHeading is arc angle
+    if(initial.direction) {
+      // invert turning when going backwards (more intuitive)
+      deltas.dHeading *= initial.direction;
+      var radius = initial.speed/initial.rot_speed;
+      var l = Math.PI/2-initial.heading-deltas.dHeading;
+      deltas.dX = radius * (Math.cos(l) - sinH);
+      deltas.dY = radius * (cosH - Math.sin(l));
+    }
+  } else {
+    var disp = initial.direction*initial.speed*dTime;
+    deltas.dX = disp*cosH;
+    deltas.dY = disp*sinH;
+  }
+
+  return deltas;
 };
 
 // data sent over the wire is in an abbreviated format; this function will

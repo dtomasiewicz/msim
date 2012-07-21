@@ -103,7 +103,6 @@ WW3.prototype = {
       self.players = {};
       for(var i = 0; i < players.length; i++) {
         var data = WW3Player.normalizeData(players[i]);
-        data.updated = new Date();
         self._addPlayer(new WW3Player(self, data));
       }
     });
@@ -236,7 +235,6 @@ WW3.prototype = {
 
     connect: function(data) {
       data = WW3Player.normalizeData(data);
-      data.updated = new Date();
       this._addPlayer(new WW3Player(this, data));
     },
 
@@ -273,6 +271,7 @@ var WW3Player = function(game, data) {
     this[attr] = data[attr];
   }
 
+  this._updated = new Date();
   this._error = {x: 0.0, y: 0.0, h: 0.0};
   this._li = null;
 };
@@ -296,14 +295,16 @@ WW3Player.prototype = {
   },
   
   interpolate: function(data, latency) {
-    var local = WW3Player.extrapolate(this, (new Date() - this.updated)/1000);
+    var local = WW3Player.extrapolate(this, (new Date() - this._updated)/1000);
     var remote = WW3Player.extrapolate(data, latency);
-
+    
     this._error = {
       x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x + local.dX),
       y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y + local.dY),
       h: WW3.mod(data.heading + remote.dH, 2*Math.PI) - WW3.mod(this.heading + local.dH, 2*Math.PI)
     };
+
+    this._corrected = new Date();
 
     // rotate whichever direction is closest to the correct one
     if(this._error.h > Math.PI) {
@@ -329,27 +330,26 @@ WW3Player.prototype = {
     return this;
   },
 
+  correct: function(speed, rot_speed) {
+    var now = new Date();
+    var dTime = now - this._corrected;
+
+    this.x = this.game.xPos(this.x + WW3.graduate(this._error.x, speed*dTime));
+    this.y = this.game.yPos(this.y + WW3.graduate(this._error.y, speed*dTime));
+    this.heading = WW3.mod(this.heading + WW3.graduate(this._error.h, rot_speed*dTime));
+    this._corrected = now;
+
+    return this;
+  },
+
   predict: function() {
     var now = new Date();
+    var delta = WW3Player.extrapolate(this, (now - this._updated)/1000);
     
-    var delta = WW3Player.extrapolate(this, (now - this.updated)/1000);
-
-    var correct = {
-      x: WW3.graduate(this._error.x, 2),
-      y: WW3.graduate(this._error.y, 2),
-      h: WW3.graduate(this._error.h, Math.PI*0.1)
-    };
-    
-    this.x = this.game.xPos(this.x + delta.dX + correct.x);
-    this._error.x -= correct.x;
-
-    this.y = this.game.yPos(this.y + delta.dY + correct.y);
-    this._error.y -= correct.y;
-
-    this.heading = WW3.mod(this.heading + delta.dH + correct.h, 2*Math.PI);
-    this._error.h -= correct.h;
-
-    this.updated = now;
+    this.x = this.game.xPos(this.x + delta.dX);
+    this.y = this.game.yPos(this.y + delta.dY);
+    this.heading = WW3.mod(this.heading + delta.dH, 2*Math.PI);
+    this._updated = now;
     
     return this;
   }

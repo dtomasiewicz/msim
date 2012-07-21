@@ -193,7 +193,7 @@ server.each_seconds 3, preemptive: false do
     end
   end
 end
-#server.each_ticks 100 do
-#  world.broadcast_state
-#end
+server.each_ticks 10 do
+  world.broadcast_state
+end
 server.start

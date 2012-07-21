@@ -71,13 +71,13 @@ WW3.prototype = {
 
   pastDelay: function() {
     var now = new Date();
-    //now.setTime(now.getTime() - this.delay()*1000);
+    now.setTime(now.getTime() - this.delay()*1000);
     return now;
   },
 
   futureDelay: function() {
     var now = new Date();
-    //now.setTime(now.getTime() + this.delay()*1000);
+    now.setTime(now.getTime() + this.delay()*1000);
     return now;
   },
 

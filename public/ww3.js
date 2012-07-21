@@ -56,6 +56,9 @@ WW3.graduate = function(value, delta) {
   return Math.abs(value) > delta ? delta*sign : value;
 };
 
+WW3.CORRECT_SPEED = 200;
+WW3.CORRECT_ROT_SPEED = Math.PI;
+
 WW3.prototype = {
 
   player: function() {
@@ -204,7 +207,7 @@ WW3.prototype = {
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
 
       var player = this.players[id];
-      player.predict().correct();
+      player.predict().correct(WW3.CORRECT_SPEED, WW3.CORRECT_ROT_SPEED);
       this._drawPlayer(ctx, player);
       player.refresh();
     }

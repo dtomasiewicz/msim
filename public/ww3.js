@@ -275,7 +275,7 @@ var WW3Player = function(game, data) {
   }
 
   this._updated = new Date();
-  this._error = {x: 0.0, y: 0.0, h: 0.0};
+  this._error = null;
   this._li = null;
 };
 
@@ -291,6 +291,7 @@ WW3Player.prototype = {
 
   update: function(data) {
     this.predict();
+
     this.direction = data.direction;
     this.speed = data.speed;
     this.rot_speed = data.rot_speed;
@@ -298,49 +299,47 @@ WW3Player.prototype = {
   },
   
   interpolate: function(data, latency) {
-    var local = WW3Player.extrapolate(this, (new Date() - this._updated)/1000);
+    this.predict();
+
     var remote = WW3Player.extrapolate(data, latency);
     
     this._error = {
-      x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x + local.dX),
-      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y + local.dY),
-      h: WW3.mod(data.heading + remote.dH, 2*Math.PI) - WW3.mod(this.heading + local.dH, 2*Math.PI)
+      x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
+      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
+      h: WW3.mod(data.heading + remote.dH, 2*Math.PI) - WW3.mod(this.heading, 2*Math.PI)
     };
-
     this._corrected = new Date();
 
     // rotate whichever direction is closest to the correct one
     if(this._error.h > Math.PI) {
-      console.log('here 1');
       this._error.h -= 2*Math.PI;
     } else if(this._error.h < -Math.PI) {
-      console.log('here 2');
       this._error.h += 2*Math.PI;
     }
 
     return this;
   },
 
-  refresh: function() {
-    if(this._li) {
-      $(this._li).text(
-        '#'+this.id+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
-        (Math.round(this.heading*10)/10)+' rad @ '+
-        (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
-        Math.round(this.latency*1000)+' ms'
-      );
-    }
-    return this;
-  },
-
   correct: function(speed, rot_speed) {
-    var now = new Date();
-    var dTime = now - this._corrected;
+    if(this._error) {
+      var now = new Date();
+      var dTime = now - this._corrected;
 
-    this.x = this.game.xPos(this.x + WW3.graduate(this._error.x, speed*dTime));
-    this.y = this.game.yPos(this.y + WW3.graduate(this._error.y, speed*dTime));
-    this.heading = WW3.mod(this.heading + WW3.graduate(this._error.h, rot_speed*dTime));
-    this._corrected = now;
+      var dx = WW3.graduate(this._error.x, speed*dTime);
+      var dy = WW3.graduate(this._error.y, speed*dTime);
+      var dh = WW3.graduate(this._error.h, rot_speed*dTime);
+
+      this.x = this.game.xPos(this.x + dx);
+      this._error.x -= dx;
+
+      this.y = this.game.yPos(this.y + dy);
+      this._error.y -= dy;
+
+      this.heading = WW3.mod(this.heading + dh, 2*Math.PI);
+      this._error.h -= dh;
+      
+      this._corrected = now;
+    }
 
     return this;
   },
@@ -354,6 +353,18 @@ WW3Player.prototype = {
     this.heading = WW3.mod(this.heading + delta.dH, 2*Math.PI);
     this._updated = now;
     
+    return this;
+  },
+
+  refresh: function() {
+    if(this._li) {
+      $(this._li).text(
+        '#'+this.id+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
+        (Math.round(this.heading*10)/10)+' rad @ '+
+        (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
+        Math.round(this.latency*1000)+' ms'
+      );
+    }
     return this;
   }
 

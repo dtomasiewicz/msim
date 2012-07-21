@@ -215,8 +215,8 @@ WW3.prototype = {
 
   _drawPlayer: function(ctx, player) {
     var h = player.heading;
-    var x = player.x_int();
-    var y = player.y_int();
+    var x = Math.round(player.x);
+    var y = Math.round(player.y);
 
     // TODO constants/options?
     var radius = 5;
@@ -283,14 +283,6 @@ var maxDx = 0, maxDy = 0;
 
 WW3Player.prototype = {
 
-  x_int: function() {
-    return this.game.xPos(Math.round(this.x));
-  },
-
-  y_int: function() {
-    return this.game.yPos(Math.round(this.y));
-  },
-
   update: function(data) {
     this.predict();
 
@@ -330,10 +322,13 @@ WW3Player.prototype = {
       var dx = WW3.graduate(this._error.x, speed*dTime);
       var dy = WW3.graduate(this._error.y, speed*dTime);
       var dh = WW3.graduate(this._error.h, rot_speed*dTime);
-      maxDx = Math.max(maxDx, dx);
-      maxDy = Math.max(maxDy, dy);
-      console.log('max dx = '+maxDx);
-      console.log('max dy = '+maxDy);
+
+      if(dx > maxDx) {
+        maxDx = dx;
+        console.log('dx = '+dx);
+        console.log('dTime = '+dTime);
+        console.log('error x = '+this._error.x);
+      }
 
       this.x = this.game.xPos(this.x + dx);
       this._error.x -= dx;

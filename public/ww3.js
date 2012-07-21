@@ -65,6 +65,22 @@ WW3.prototype = {
     return this.players[this._playerId];
   },
 
+  delay: function() {
+    return this.player().latency/2.0;
+  },
+
+  pastDelay: function() {
+    var now = new Date();
+    //now.setTime(now.getTime() - this.delay()*1000);
+    return now;
+  },
+
+  futureDelay: function() {
+    var now = new Date();
+    //now.setTime(now.getTime() + this.delay()*1000);
+    return now;
+  },
+
   width: function() {
     return this.display.canvas.width;
   },
@@ -175,23 +191,23 @@ WW3.prototype = {
   },
 
   _backward: function() {
-    this.player().predict().direction = -1;
+    this.player().predict(this.futureDelay()).direction = -1;
     this._gamz.act('backward');
   },
 
   _forward: function() {
-    this.player().predict().direction = 1;
+    this.player().predict(this.futureDelay()).direction = 1;
     this._gamz.act('forward');
   },
 
   _stop: function() {
-    this.player().predict().direction = 0;
+    this.player().predict(this.futureDelay()).direction = 0;
     this._gamz.act('stop');
   },
 
   // direction: 1=CCW, -1=CW, 0=none
   _rotate: function(direction) {
-    this.player().predict().rot_speed = direction*this.rot_speed;
+    this.player().predict(this.futureDelay()).rot_speed = direction*this.rot_speed;
     this._gamz.act('rotate', this.player().rot_speed);
   },
 
@@ -253,12 +269,12 @@ WW3.prototype = {
 
       for(var i = 0; i < datas.length; i++) {
         var data = WW3Player.normalizeData(datas[i]);
-        this.players[data.id].interpolate(data, this.player().latency);
+        this.players[data.id].interpolate(this.pastDelay(), data);
 
         if(data.id == this._playerId) {
           this.player().latency = data.latency;
         } else {
-          this.players[data.id].update(data);
+          this.players[data.id].update(this.pastDelay(), data);
         }
       }
     }
@@ -283,8 +299,8 @@ var maxDx = 0, maxDy = 0;
 
 WW3Player.prototype = {
 
-  update: function(data) {
-    this.predict();
+  update: function(now, data) {
+    this.predict(now);
 
     this.direction = data.direction;
     this.speed = data.speed;
@@ -292,10 +308,10 @@ WW3Player.prototype = {
     this.latency = data.latency;
   },
   
-  interpolate: function(data, latency) {
+  interpolate: function(now, data) {
     this.predict();
 
-    var remote = WW3Player.extrapolate(data, 0);
+    var remote = WW3Player.extrapolate(data, (new Date() - now)/1000);
     
     this._error = {
       x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
@@ -345,10 +361,10 @@ WW3Player.prototype = {
     return this;
   },
 
-  predict: function() {
-    var now = new Date();
+  predict: function(now) {
+    if(typeof now == 'undefined') now = new Date();
     var delta = WW3Player.extrapolate(this, (now - this._updated)/1000);
-    
+
     this.x = this.game.xPos(this.x + delta.dX);
     this.y = this.game.yPos(this.y + delta.dY);
     this.heading = WW3.mod(this.heading + delta.dH, 2*Math.PI);

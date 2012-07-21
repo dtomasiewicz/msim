@@ -295,7 +295,7 @@ WW3Player.prototype = {
   interpolate: function(data, latency) {
     this.predict();
 
-    var remote = WW3Player.extrapolate(data, latency);
+    var remote = WW3Player.extrapolate(data, 0);
     
     this._error = {
       x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),

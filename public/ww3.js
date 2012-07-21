@@ -268,7 +268,7 @@ var WW3Player = function(game, data) {
     this[attr] = data[attr];
   }
 
-  this._error = {x: 0, y: 0};
+  this._error = {x: 0.0, y: 0.0, h: 0.0};
   this._li = null;
 };
 
@@ -284,7 +284,7 @@ WW3Player.prototype = {
 
   update: function(data) {
     for(var attr in data) {
-      if(attr != 'x' && attr != 'y') {
+      if(attr != 'x' && attr != 'y' && attr != 'heading') {
         this[attr] = data[attr];
       }
     }
@@ -296,8 +296,18 @@ WW3Player.prototype = {
 
     this._error = {
       x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x + local.dX),
-      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y + local.dY)
+      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y + local.dY),
+      h: WW3.mod(data.heading + remote.dH, 2*Math.PI) - WW3.mod(this.heading + local.dH, 2*Math.PI)
     };
+
+    // rotate whichever direction is closest to the correct one
+    if(this._error.h > Math.PI) {
+      console.log('here 1');
+      this._error.h -= 2*Math.PI;
+    } else if(this._error.h < -Math.PI) {
+      console.log('here 2');
+      this._error.h += 2*Math.PI;
+    }
 
     return this;
   },
@@ -321,7 +331,8 @@ WW3Player.prototype = {
 
     var correct = {
       x: Math.abs(this._error.x) > 2 ? this._error.x*0.5 : this._error.x,
-      y: Math.abs(this._error.y) > 2 ? this._error.y*0.5 : this._error.y
+      y: Math.abs(this._error.y) > 2 ? this._error.y*0.5 : this._error.y,
+      h: Math.abs(this._error.h) > (Math.PI*0.1) ? this._error.h*0.5 : this._error.h
     };
     
     this.x = this.game.xPos(this.x + delta.dX + correct.x);
@@ -330,7 +341,9 @@ WW3Player.prototype = {
     this.y = this.game.yPos(this.y + delta.dY + correct.y);
     this._error.y -= correct.y;
 
-    this.heading = WW3.mod(this.heading + delta.dHeading, 2*Math.PI);
+    this.heading = WW3.mod(this.heading + delta.dH + correct.h, 2*Math.PI);
+    this._error.h -= correct.h;
+
     this.updated = now;
     
     return this;
@@ -355,28 +368,28 @@ WW3Player.prototype = {
 //   return = {
 //     dX: number pixels
 //     dY: number pixels
-//     dHeading: number rad
+//     dH: number rad
 //   }
 //
 WW3Player.extrapolate = function(initial, dTime) {
   var deltas = {
     dX: 0.0,
     dY: 0.0,
-    dHeading: 0.0
+    dH: 0.0
   };
 
   var sinH = Math.sin(initial.heading);
   var cosH = Math.cos(initial.heading);
 
   if(initial.rot_speed != 0.0) {
-    deltas.dHeading = initial.rot_speed*dTime;
+    deltas.dH = initial.rot_speed*dTime;
 
-    // if moving, apply to an arc; dHeading is arc angle
+    // if moving, apply to an arc; dH is arc angle
     if(initial.direction) {
       // invert turning when going backwards (more intuitive)
-      deltas.dHeading *= initial.direction;
+      deltas.dH *= initial.direction;
       var radius = initial.speed/initial.rot_speed;
-      var l = Math.PI/2-initial.heading-deltas.dHeading;
+      var l = Math.PI/2-initial.heading-deltas.dH;
       deltas.dX = radius * (Math.cos(l) - sinH);
       deltas.dY = radius * (cosH - Math.sin(l));
     }

@@ -283,11 +283,11 @@ WW3Player.prototype = {
   },
 
   update: function(data) {
-    for(var attr in data) {
-      if(attr != 'x' && attr != 'y' && attr != 'heading') {
-        this[attr] = data[attr];
-      }
-    }
+    this.predict();
+    this.direction = data.direction;
+    this.speed = data.speed;
+    this.rot_speed = data.rot_speed;
+    this.latency = data.latency;
   },
   
   interpolate: function(data, latency) {

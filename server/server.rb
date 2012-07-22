@@ -17,16 +17,6 @@ class Avatar
     @updated = Time.now
   end
 
-  def forward!
-    compute!
-    @direction = 1
-  end
-
-  def backward!
-    compute!
-    @direction = -1
-  end
-
   def stop!
     compute!
     @direction = 0
@@ -35,6 +25,11 @@ class Avatar
   def heading=(heading)
     compute!
     @heading = heading
+  end
+
+  def direction=(direction)
+    compute!
+    @direction = direction <=> 0
   end
 
   def rot_speed=(rot_speed)
@@ -61,8 +56,7 @@ class Avatar
 
       # if moving, apply to an arc; dh is arc angle
       if @direction != 0
-        # invert turning when going backwards (more intuitive)
-        dh *= @direction
+        dh *= @direction # invert turning when moving backwards
         radius = @speed/@rot_speed
         l = Math::PI/2-@heading-dh
         dx = radius * (Math.cos(l) - sin_h)
@@ -133,34 +127,16 @@ class World
     [:success, @width, @height, @avatars.values.map(&:data), avatar.id]
   end
 
-  def react_forward(avatar)
-    avatar.forward!
-    notify_all :data, avatar.data
-    :success
+  def react_direction(avatar, direction)
+    avatar.direction = direction.to_i
+    notify_except avatar, :data, avatar.data
+    [:success, avatar.data]
   end
 
-  def react_backward(avatar)
-    avatar.backward!
-    notify_all :data, avatar.data
-    :success
-  end
-
-  def react_stop(avatar)
-    avatar.stop!
-    notify_all :data, avatar.data
-    :success
-  end
-
-  def react_heading(avatar, heading)
-    avatar.heading = heading.to_f % (2*Math::PI)
-    notify_all :data, avatar.data
-    :success
-  end
-
-  def react_rotate(avatar, speed)
-    avatar.rot_speed = speed.to_f
-    notify_all :data, avatar.data
-    :success
+  def react_rot_speed(avatar, rot_speed)
+    avatar.rot_speed = rot_speed.to_f
+    notify_except avatar, :data, avatar.data
+    [:success, avatar.data]
   end
 
   private

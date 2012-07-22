@@ -193,25 +193,34 @@ WW3.prototype = {
     })();
   },
 
+  _set: function(attr, value) {
+    var player = this.player();
+    player.update(attr, value);
+    var bench = {x: player.x, y: player.y, h: player.heading};
+    this._gamz.act(attr, [value], function(real) {
+      player.setError(
+        real.x - bench.x,
+        real.y - bench.y,
+        real.heading - bench.h
+      );
+    });
+  },
+
   _backward: function() {
-    this.player().update({direction: -1}, true);
-    this._gamz.act('backward');
+    this._set('direction', -1);
   },
 
   _forward: function() {
-    this.player().update({direction: 1}, true);
-    this._gamz.act('forward');
+    this._set('direction', 1);
   },
 
   _stop: function() {
-    this.player().update({direction: 0}, true);
-    this._gamz.act('stop');
+    this._set('direction', 0);
   },
 
   // direction: 1=CCW, -1=CW, 0=none
   _rotate: function(direction) {
-    this.player().update({rot_speed: direction*this.rot_speed}, true);
-    this._gamz.act('rotate', this.player().rot_speed);
+    this._set('rot_speed', direction*this.rot_speed);
   },
 
   _redraw: function() {
@@ -282,7 +291,6 @@ WW3.prototype = {
 
         if(player.id == this._playerId) {
           player.latency = data.latency;
-          player.debench(data);
         } else {
           player.interpolate(data, this.compensate ? this.latency() : 0);
           delete data.x;
@@ -304,7 +312,6 @@ var WW3Player = function(game, data) {
     this[attr] = data[attr];
   }
 
-  this._benchmarks = [];
   this._updated = new Date();
   this._error = null;
   this._li = null;
@@ -312,20 +319,19 @@ var WW3Player = function(game, data) {
 
 WW3Player.prototype = {
 
-  update: function(data, benchmark) {
+  update: function(attr, value) {
     this.extrapolate();
 
-    if(benchmark) {
-      console.log('benching');
-      this._benchmarks.push([data, {x: this.x, y: this.y, h: this.heading}]);
-    }
-
-    for(var attr in data) {
-      this[attr] = data[attr];
+    if(typeof attr == 'object') {
+      for(var a in attr) {
+        this[a] = attr[a];
+      }
+    } else {
+      this[attr] = value;
     }
   },
 
-  _setError: function(x, y, h) {
+  setError: function(x, y, h) {
     // rotate in whichever direction is closest to the correct heading
     if(h > Math.PI) {
       h -= 2*Math.PI;
@@ -335,9 +341,9 @@ WW3Player.prototype = {
 
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
+      this._corrected = new Date();
       console.log('errors set');
       console.log(this._error);
-      this._corrected = new Date();
     }
   },
   
@@ -349,37 +355,11 @@ WW3Player.prototype = {
 
     var remote = latency ? WW3Player.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
     
-    this._setError(
+    this.setError(
       this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
       this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
       WW3.mod(data.heading + remote.dH, 2*Math.PI) - this.heading
     );
-
-    return this;
-  },
-
-  debench: function(data) {
-    if(this._benchmarks.length > 0) {
-      console.log('debenching');
-      var bm = this._benchmarks.shift();
-      console.log(bm);
-      console.log(data);
-
-      for(var attr in bm[0]) {
-        if(bm[0][attr] != data[attr]) {
-          // this dataset does not apply to this benchmark
-          console.log('failed debench');
-          this._benchmarks.unshift(bm);
-          return this;
-        }
-      }
-
-      this._setError(
-        data.x - bm[1].x,
-        data.y - bm[1].y,
-        data.heading - bm[1].h
-      );
-    }
 
     return this;
   },
@@ -473,8 +453,7 @@ WW3Player.extrapolate = function(initial, dTime) {
 
     // if moving, apply to an arc; dH is arc angle
     if(initial.direction) {
-      // invert turning when going backwards (more intuitive)
-      delta.dH *= initial.direction;
+      delta.dH *= initial.direction; // invert turning when moving backwards
       var radius = initial.speed/initial.rot_speed;
       var l = Math.PI/2-initial.heading-delta.dH;
       delta.dX = radius * (Math.cos(l) - sinH);

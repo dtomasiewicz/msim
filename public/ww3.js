@@ -342,8 +342,6 @@ WW3Player.prototype = {
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
       this._corrected = new Date();
-      console.log('errors set');
-      console.log(this._error);
     }
   },
   

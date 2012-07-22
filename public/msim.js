@@ -9,12 +9,12 @@ var KeyCodes = {
   }
 };
 
-var WW3 = function(options) {
+var MSim = function(options) {
   if(typeof options == 'undefined') options = {};
 
   this.display = {
-    canvas: $('<canvas class="ww3-canvas" tabindex="1"></canvas>').get(0),
-    players: $('<ul class="ww3-players"></ul>').get(0)
+    canvas: $('<canvas class="msim-canvas" tabindex="1"></canvas>').get(0),
+    players: $('<ul class="msim-players"></ul>').get(0)
   };
 
   if('target' in options) {
@@ -49,20 +49,20 @@ var WW3 = function(options) {
   this._gamz.open({port: 10001});
 };
 
-WW3.DEFAULT_CORRECT_SPEED = 200;
-WW3.DEFAULT_CORRECT_ROT_SPEED = Math.PI;
+MSim.DEFAULT_CORRECT_SPEED = 200;
+MSim.DEFAULT_CORRECT_ROT_SPEED = Math.PI;
 
 // fix for JS's modulus of negative numbers
-WW3.mod = function(a, b) {
+MSim.mod = function(a, b) {
   return ((a%b)+b)%b;
 };
 
-WW3.graduate = function(value, delta) {
+MSim.graduate = function(value, delta) {
   var sign = Math.round(value/Math.abs(value));
   return Math.abs(value) > delta ? delta*sign : value;
 };
 
-WW3.prototype = {
+MSim.prototype = {
 
   player: function() {
     return this.players[this._playerId];
@@ -124,8 +124,8 @@ WW3.prototype = {
 
       self.players = {};
       for(var i = 0; i < players.length; i++) {
-        var data = WW3Player.normalizeData(players[i]);
-        self._addPlayer(new WW3Player(self, data));
+        var data = MSimPlayer.normalizeData(players[i]);
+        self._addPlayer(new MSimPlayer(self, data));
       }
     });
 
@@ -238,8 +238,8 @@ WW3.prototype = {
       player.extrapolate();
       
       player.correct(
-        this.correct_speed || player.speed || WW3.DEFAULT_CORRECT_SPEED,
-        this.correct_rot_speed || player.rot_speed || WW3.DEFAULT_CORRECT_ROT_SPEED
+        this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED,
+        this.correct_rot_speed || player.rot_speed || MSim.DEFAULT_CORRECT_ROT_SPEED
       );
 
       this._drawPlayer(ctx, player);
@@ -271,8 +271,8 @@ WW3.prototype = {
   _notifyHandlers: {
 
     connect: function(data) {
-      data = WW3Player.normalizeData(data);
-      this._addPlayer(new WW3Player(this, data));
+      data = MSimPlayer.normalizeData(data);
+      this._addPlayer(new MSimPlayer(this, data));
     },
 
     disconnect: function(player) {
@@ -286,7 +286,7 @@ WW3.prototype = {
       }
 
       for(var i = 0; i < datas.length; i++) {
-        var data = WW3Player.normalizeData(datas[i]);
+        var data = MSimPlayer.normalizeData(datas[i]);
         var player = this.players[data.id];
 
         if(player.id == this._playerId) {
@@ -305,7 +305,7 @@ WW3.prototype = {
 
 };
 
-var WW3Player = function(game, data) {
+var MSimPlayer = function(game, data) {
   this.game = game;
 
   for(var attr in data) {
@@ -317,7 +317,7 @@ var WW3Player = function(game, data) {
   this._li = null;
 };
 
-WW3Player.prototype = {
+MSimPlayer.prototype = {
 
   update: function(attr, value) {
     this.extrapolate();
@@ -351,12 +351,12 @@ WW3Player.prototype = {
   interpolate: function(data, latency) {
     this.extrapolate();
 
-    var remote = latency ? WW3Player.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
+    var remote = latency ? MSimPlayer.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
     
     this.setError(
       this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
       this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
-      WW3.mod(data.heading + remote.dH, 2*Math.PI) - this.heading
+      MSim.mod(data.heading + remote.dH, 2*Math.PI) - this.heading
     );
 
     return this;
@@ -370,8 +370,8 @@ WW3Player.prototype = {
       if(this._error.x || this._error.y) {
         var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
         var disp = speed*dTime;
-        var dx = WW3.graduate(this._error.x, factor*disp);
-        var dy = WW3.graduate(this._error.y, (1-factor)*disp);
+        var dx = MSim.graduate(this._error.x, factor*disp);
+        var dy = MSim.graduate(this._error.y, (1-factor)*disp);
 
         this.x = this.game.xPos(this.x + dx);
         this._error.x -= dx;
@@ -381,8 +381,8 @@ WW3Player.prototype = {
       }
 
       if(this._error.h) {
-        var dh = WW3.graduate(this._error.h, rot_speed*dTime);
-        this.heading = WW3.mod(this.heading + dh, 2*Math.PI);
+        var dh = MSim.graduate(this._error.h, rot_speed*dTime);
+        this.heading = MSim.mod(this.heading + dh, 2*Math.PI);
         this._error.h -= dh;
       }
 
@@ -394,11 +394,11 @@ WW3Player.prototype = {
 
   extrapolate: function() {
     var now = new Date();
-    var delta = WW3Player.extrapolate(this, (now - this._updated)/1000);
+    var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
 
     this.x = this.game.xPos(this.x + delta.dX);
     this.y = this.game.yPos(this.y + delta.dY);
-    this.heading = WW3.mod(this.heading + delta.dH, 2*Math.PI);
+    this.heading = MSim.mod(this.heading + delta.dH, 2*Math.PI);
     this._updated = now;
    
     return this;
@@ -436,7 +436,7 @@ WW3Player.prototype = {
 //     dH: number rad
 //   }
 //
-WW3Player.extrapolate = function(initial, dTime) {
+MSimPlayer.extrapolate = function(initial, dTime) {
   var delta = {
     dX: 0.0,
     dY: 0.0,
@@ -468,7 +468,7 @@ WW3Player.extrapolate = function(initial, dTime) {
 
 // data sent over the wire is in an abbreviated format; this function will
 // convert it to the full format if necessary
-WW3Player.normalizeData = function(data) {
+MSimPlayer.normalizeData = function(data) {
   if('id' in data) {
     return data;
   } else {

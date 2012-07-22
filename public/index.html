@@ -1,50 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>World War 3</title>
+    <title>MoveSim</title>
     <script src="gamz-client.js"></script>
     <script src="jquery.js"></script>
-    <script src="ww3.js"></script>
+    <script src="msim.js"></script>
     <script>
       $(function() {
-        var game = new WW3({
-          target: $('#ww3').get(0)
+        var game = new MSim({
+          target: $('#msim').get(0)
         });
 
-        $('.ww3-opt').change(function() {
+        $('.msim-opt').change(function() {
           game[this.name] = $(this).is(':checkbox') ? $(this).is(':checked') : this.value;
           game.display.canvas.focus();
         }).change();
       });
     </script>
     <style>
-      .ww3-canvas {
+      .msim-canvas {
         border: 1px solid #000;
       }
     </style>
   </head>
   <body>
-    <h1>World War 3</h1>
+    <h1>MoveSim</h1>
     <p>
       <label>Rotate speed: 
-        <input name="rot_speed" value="3.14" size="1" class="ww3-opt"> rad/sec; 
+        <input name="rot_speed" value="3.14" size="1" class="msim-opt"> rad/sec; 
       </label>
       <label>Redraw every: 
-        <input name="redraw_rate" value="25" size="1" class="ww3-opt"> ms
+        <input name="redraw_rate" value="25" size="1" class="msim-opt"> ms
       </label>
     </p>
     <p>
       <strong>Error correction:</strong> 
       <label>speed: 
-        <input name="correct_speed" value="200" size="1" class="ww3-opt"> pix/sec; 
+        <input name="correct_speed" value="200" size="1" class="msim-opt"> pix/sec; 
       </label>
       <label>rotate speed: 
-        <input name="correct_rot_speed" value="3.14" size="1" class="ww3-opt"> rad/sec; 
+        <input name="correct_rot_speed" value="3.14" size="1" class="msim-opt"> rad/sec; 
       </label>
       <label>compensate for lag: 
-        <input name="compensate" type="checkbox" size="1" class="ww3-opt">
+        <input name="compensate" type="checkbox" size="1" class="msim-opt">
       </label>
     </p>
-    <div id="ww3"></div>
+    <div id="msim"></div>
   </body>
 </html>

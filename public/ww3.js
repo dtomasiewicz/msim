@@ -360,7 +360,10 @@ WW3Player.prototype = {
 
   debench: function(data) {
     if(this._benchmarks.length > 0) {
+      console.log('debenching');
       var bm = this._benchmarks.shift();
+      console.log(bm);
+      console.log(data);
 
       for(var attr in bm[0]) {
         if(bm[0][attr] != data[attr]) {

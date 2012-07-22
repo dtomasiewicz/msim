@@ -198,6 +198,9 @@ MSim.prototype = {
     player.update(attr, value);
     var bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
+      console.log('comparing');
+      console.log(bench);
+      console.log(real);
       player.setError(
         real.x - bench.x,
         real.y - bench.y,
@@ -342,6 +345,8 @@ MSimPlayer.prototype = {
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
       this._corrected = new Date();
+      console.log('setting error');
+      console.log(this._error);
     }
   },
   

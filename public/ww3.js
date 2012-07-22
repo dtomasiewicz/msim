@@ -194,23 +194,23 @@ WW3.prototype = {
   },
 
   _backward: function() {
-    this.player().update({direction: -1});
+    this.player().update({direction: -1}, true);
     this._gamz.act('backward');
   },
 
   _forward: function() {
-    this.player().update({direction: 1});
+    this.player().update({direction: 1}, true);
     this._gamz.act('forward');
   },
 
   _stop: function() {
-    this.player().update({direction: 0});
+    this.player().update({direction: 0}, true);
     this._gamz.act('stop');
   },
 
   // direction: 1=CCW, -1=CW, 0=none
   _rotate: function(direction) {
-    this.player().update({rot_speed: direction*this.rot_speed});
+    this.player().update({rot_speed: direction*this.rot_speed}, true);
     this._gamz.act('rotate', this.player().rot_speed);
   },
 
@@ -278,15 +278,16 @@ WW3.prototype = {
 
       for(var i = 0; i < datas.length; i++) {
         var data = WW3Player.normalizeData(datas[i]);
-        this.players[data.id].interpolate(data, this.compensate ? this.latency() : 0);
+        var player = this.players[data.id];
 
-        delete data.x;
-        delete data.y;
-        delete data.heading;
-
-        if(data.id == this._playerId) {
-          this.player().latency = data.latency;
+        if(player.id == this._playerId) {
+          player.latency = data.latency;
+          player.debench(data);
         } else {
+          player.interpolate(data, this.compensate ? this.latency() : 0);
+          delete data.x;
+          delete data.y;
+          delete data.heading;
           this.players[data.id].update(data);
         }
       }
@@ -303,6 +304,7 @@ var WW3Player = function(game, data) {
     this[attr] = data[attr];
   }
 
+  this._benchmarks = [];
   this._updated = new Date();
   this._error = null;
   this._li = null;
@@ -310,11 +312,30 @@ var WW3Player = function(game, data) {
 
 WW3Player.prototype = {
 
-  update: function(data) {
+  update: function(data, benchmark) {
     this.extrapolate();
+
+    if(benchmark) {
+      console.log('benching');
+      this._benchmarks.push([data, {x: this.x, y: this.y, h: this.heading}]);
+    }
 
     for(var attr in data) {
       this[attr] = data[attr];
+    }
+  },
+
+  _setError: function(x, y, h) {
+    // rotate in whichever direction is closest to the correct heading
+    if(h > Math.PI) {
+      h -= 2*Math.PI;
+    } else if(h < -Math.PI) {
+      h += 2*Math.PI;
+    }
+
+    if(x || y || h) {
+      this._error = {x: x, y: y, h: h};
+      this._corrected = new Date();
     }
   },
   
@@ -326,18 +347,37 @@ WW3Player.prototype = {
 
     var remote = latency ? WW3Player.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
     
-    this._error = {
-      x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
-      y: this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
-      h: WW3.mod(data.heading + remote.dH, 2*Math.PI) - WW3.mod(this.heading, 2*Math.PI)
-    };
-    this._corrected = new Date();
+    this._setError(
+      this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
+      this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
+      WW3.mod(data.heading + remote.dH, 2*Math.PI) - this.heading
+    );
 
-    // rotate in whichever direction is closest to the correct heading
-    if(this._error.h > Math.PI) {
-      this._error.h -= 2*Math.PI;
-    } else if(this._error.h < -Math.PI) {
-      this._error.h += 2*Math.PI;
+    return this;
+  },
+
+  debench: function(data) {
+    console.log('debenching');
+
+    if(this._benchmarks.length > 0) {
+      var bm = this._benchmarks.shift();
+
+      for(var attr in bm[0]) {
+        if(bm[0][attr] != data[attr]) {
+          // this dataset does not apply to this benchmark
+          console.log('failed debench');
+          this._benchmarks.unshift(bm);
+          return this;
+        }
+      }
+
+      this._setError(
+        data.x - bm[1].x,
+        data.y - bm[1].y,
+        data.heading - bm[1].h
+      );
+
+      console.log('debench success');
     }
 
     return this;
@@ -349,15 +389,10 @@ WW3Player.prototype = {
       var dTime = (now - this._corrected)/1000;
 
       if(this._error.x || this._error.y) {
-        console.log('correcting xy');
         var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
-        console.log('factor '+factor);
         var disp = speed*dTime;
-        console.log('disp '+disp);
         var dx = WW3.graduate(this._error.x, factor*disp);
         var dy = WW3.graduate(this._error.y, (1-factor)*disp);
-        console.log(dx);
-        console.log(dy);
 
         this.x = this.game.xPos(this.x + dx);
         this._error.x -= dx;

@@ -335,6 +335,8 @@ WW3Player.prototype = {
 
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
+      console.log('errors set');
+      console.log(this._error);
       this._corrected = new Date();
     }
   },
@@ -357,8 +359,6 @@ WW3Player.prototype = {
   },
 
   debench: function(data) {
-    console.log('debenching');
-
     if(this._benchmarks.length > 0) {
       var bm = this._benchmarks.shift();
 
@@ -376,8 +376,6 @@ WW3Player.prototype = {
         data.y - bm[1].y,
         data.heading - bm[1].h
       );
-
-      console.log('debench success');
     }
 
     return this;

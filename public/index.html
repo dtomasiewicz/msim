@@ -12,7 +12,7 @@
         });
 
         $('.ww3-opt').change(function() {
-          game[this.name] = this.value;
+          game[this.name] = $(this).is(':checkbox') ? $(this).is(':checked') : this.value;
           game.display.canvas.focus();
         }).change();
       });
@@ -26,11 +26,23 @@
   <body>
     <h1>World War 3</h1>
     <p>
-      <label>Angular speed: 
-        <input name="rot_speed" type="text" value="3.14" size="1" class="ww3-opt"> rad/sec; 
+      <label>Rotate speed: 
+        <input name="rot_speed" value="3.14" size="1" class="ww3-opt"> rad/sec; 
       </label>
       <label>Redraw every: 
-        <input name="redraw_rate" type="text" value="25" size="1" class="ww3-opt"> ms
+        <input name="redraw_rate" value="25" size="1" class="ww3-opt"> ms
+      </label>
+    </p>
+    <p>
+      <strong>Error correction:</strong> 
+      <label>speed: 
+        <input name="correct_speed" value="200" size="1" class="ww3-opt"> pix/sec; 
+      </label>
+      <label>rotate speed: 
+        <input name="correct_rot_speed" value="3.14" size="1" class="ww3-opt"> rad/sec; 
+      </label>
+      <label>compensate for lag: 
+        <input name="compensate" type="checkbox" size="1" class="ww3-opt">
       </label>
     </p>
     <div id="ww3"></div>

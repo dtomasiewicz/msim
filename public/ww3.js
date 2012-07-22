@@ -22,8 +22,11 @@ var WW3 = function(options) {
     this.display.canvas.focus();
   }
 
-  this.rot_speed = 'rot_speed' in options ? options.rot_speed : Math.PI;
-  this.redraw_rate = 'redraw_rate' in options ? options.redraw_rate : 25;
+  this.rot_speed = Math.PI;
+  this.redraw_rate = 25;
+  this.correct_speed = 200;
+  this.correct_rot_speed = Math.PI;
+  this.compensate = false;
 
   this.players = null;
   this._playerId = null;
@@ -46,6 +49,9 @@ var WW3 = function(options) {
   this._gamz.open({port: 10001});
 };
 
+WW3.DEFAULT_CORRECT_SPEED = 200;
+WW3.DEFAULT_CORRECT_ROT_SPEED = Math.PI;
+
 // fix for JS's modulus of negative numbers
 WW3.mod = function(a, b) {
   return ((a%b)+b)%b;
@@ -55,9 +61,6 @@ WW3.graduate = function(value, delta) {
   var sign = Math.round(value/Math.abs(value));
   return Math.abs(value) > delta ? delta*sign : value;
 };
-
-WW3.CORRECT_SPEED = 100;
-WW3.CORRECT_ROT_SPEED = Math.PI/2;
 
 WW3.prototype = {
 
@@ -191,23 +194,23 @@ WW3.prototype = {
   },
 
   _backward: function() {
-    this.player().predict(this.futureDelay()).direction = -1;
+    this.player().update({direction: -1});
     this._gamz.act('backward');
   },
 
   _forward: function() {
-    this.player().predict(this.futureDelay()).direction = 1;
+    this.player().update({direction: 1});
     this._gamz.act('forward');
   },
 
   _stop: function() {
-    this.player().predict(this.futureDelay()).direction = 0;
+    this.player().update({direction: 0});
     this._gamz.act('stop');
   },
 
   // direction: 1=CCW, -1=CW, 0=none
   _rotate: function(direction) {
-    this.player().predict(this.futureDelay()).rot_speed = direction*this.rot_speed;
+    this.player().update({rot_speed: direction*this.rot_speed});
     this._gamz.act('rotate', this.player().rot_speed);
   },
 
@@ -223,7 +226,15 @@ WW3.prototype = {
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
 
       var player = this.players[id];
-      player.predict().correct(WW3.CORRECT_SPEED, WW3.CORRECT_ROT_SPEED);
+      player.extrapolate();
+      
+      if(id != this._playerId || !this.player().direction) {
+        player.correct(
+          this.correct_speed || player.speed || WW3.DEFAULT_CORRECT_SPEED,
+          this.correct_rot_speed || player.rot_speed || WW3.DEFAULT_CORRECT_ROT_SPEED
+        );
+      }
+
       this._drawPlayer(ctx, player);
       player.refresh();
     }
@@ -269,12 +280,16 @@ WW3.prototype = {
 
       for(var i = 0; i < datas.length; i++) {
         var data = WW3Player.normalizeData(datas[i]);
-        this.players[data.id].interpolate(this.pastDelay(), data);
+        this.players[data.id].interpolate(data, this.compensate ? this.latency() : 0);
+
+        delete data.x;
+        delete data.y;
+        delete data.heading;
 
         if(data.id == this._playerId) {
           this.player().latency = data.latency;
         } else {
-          this.players[data.id].update(this.pastDelay(), data);
+          this.players[data.id].update(data);
         }
       }
     }
@@ -295,23 +310,23 @@ var WW3Player = function(game, data) {
   this._li = null;
 };
 
-var maxDx = 0, maxDy = 0;
-
 WW3Player.prototype = {
 
-  update: function(now, data) {
-    this.predict(now);
+  update: function(data) {
+    this.extrapolate();
 
-    this.direction = data.direction;
-    this.speed = data.speed;
-    this.rot_speed = data.rot_speed;
-    this.latency = data.latency;
+    for(var attr in data) {
+      this[attr] = data[attr];
+    }
   },
   
-  interpolate: function(now, data) {
-    this.predict();
+  // if a latency is provided, will extrapolate a new current based on it.
+  // this may make complex movement look jerky, but will provide more accurate
+  // positions for simpler movement patterns.
+  interpolate: function(data, latency) {
+    this.extrapolate();
 
-    var remote = WW3Player.extrapolate(data, (new Date() - now)/1000);
+    var remote = latency ? WW3Player.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
     
     this._error = {
       x: this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
@@ -320,7 +335,7 @@ WW3Player.prototype = {
     };
     this._corrected = new Date();
 
-    // rotate whichever direction is closest to the correct one
+    // rotate in whichever direction is closest to the correct heading
     if(this._error.h > Math.PI) {
       this._error.h -= 2*Math.PI;
     } else if(this._error.h < -Math.PI) {
@@ -335,25 +350,29 @@ WW3Player.prototype = {
       var now = new Date();
       var dTime = (now - this._corrected)/1000;
 
-      var dx = WW3.graduate(this._error.x, speed*dTime);
-      var dy = WW3.graduate(this._error.y, speed*dTime);
-      var dh = WW3.graduate(this._error.h, rot_speed*dTime);
+      if(this._error.x || this._error.y) {
+        console.log('correcting xy');
+        var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
+        console.log('factor '+factor);
+        var disp = speed*dTime;
+        console.log('disp '+disp);
+        var dx = WW3.graduate(this._error.x, factor*disp);
+        var dy = WW3.graduate(this._error.y, (1-factor)*disp);
+        console.log(dx);
+        console.log(dy);
 
-      if(dx > maxDx) {
-        maxDx = dx;
-        console.log('dx = '+dx);
-        console.log('dTime = '+dTime);
-        console.log('error x = '+this._error.x);
+        this.x = this.game.xPos(this.x + dx);
+        this._error.x -= dx;
+
+        this.y = this.game.yPos(this.y + dy);
+        this._error.y -= dy;
       }
 
-      this.x = this.game.xPos(this.x + dx);
-      this._error.x -= dx;
-
-      this.y = this.game.yPos(this.y + dy);
-      this._error.y -= dy;
-
-      this.heading = WW3.mod(this.heading + dh, 2*Math.PI);
-      this._error.h -= dh;
+      if(this._error.h) {
+        var dh = WW3.graduate(this._error.h, rot_speed*dTime);
+        this.heading = WW3.mod(this.heading + dh, 2*Math.PI);
+        this._error.h -= dh;
+      }
 
       this._corrected = now;
     }
@@ -361,15 +380,15 @@ WW3Player.prototype = {
     return this;
   },
 
-  predict: function(now) {
-    if(typeof now == 'undefined') now = new Date();
+  extrapolate: function() {
+    var now = new Date();
     var delta = WW3Player.extrapolate(this, (now - this._updated)/1000);
 
     this.x = this.game.xPos(this.x + delta.dX);
     this.y = this.game.yPos(this.y + delta.dY);
     this.heading = WW3.mod(this.heading + delta.dH, 2*Math.PI);
     this._updated = now;
-    
+   
     return this;
   },
 
@@ -395,8 +414,6 @@ WW3Player.prototype = {
 //     speed: number pix/s
 //     heading: number rad
 //     direction: 1 (forward), 0 (stationary), or -1 (backward)
-//     x: number pixels
-//     y: number pixels
 //   }
 //
 //   dTime = number seconds
@@ -408,7 +425,7 @@ WW3Player.prototype = {
 //   }
 //
 WW3Player.extrapolate = function(initial, dTime) {
-  var deltas = {
+  var delta = {
     dX: 0.0,
     dY: 0.0,
     dH: 0.0
@@ -418,24 +435,24 @@ WW3Player.extrapolate = function(initial, dTime) {
   var cosH = Math.cos(initial.heading);
 
   if(initial.rot_speed != 0.0) {
-    deltas.dH = initial.rot_speed*dTime;
+    delta.dH = initial.rot_speed*dTime;
 
     // if moving, apply to an arc; dH is arc angle
     if(initial.direction) {
       // invert turning when going backwards (more intuitive)
-      deltas.dH *= initial.direction;
+      delta.dH *= initial.direction;
       var radius = initial.speed/initial.rot_speed;
-      var l = Math.PI/2-initial.heading-deltas.dH;
-      deltas.dX = radius * (Math.cos(l) - sinH);
-      deltas.dY = radius * (cosH - Math.sin(l));
+      var l = Math.PI/2-initial.heading-delta.dH;
+      delta.dX = radius * (Math.cos(l) - sinH);
+      delta.dY = radius * (cosH - Math.sin(l));
     }
   } else {
     var disp = initial.direction*initial.speed*dTime;
-    deltas.dX = disp*cosH;
-    deltas.dY = disp*sinH;
+    delta.dX = disp*cosH;
+    delta.dY = disp*sinH;
   }
 
-  return deltas;
+  return delta;
 };
 
 // data sent over the wire is in an abbreviated format; this function will

@@ -228,12 +228,10 @@ WW3.prototype = {
       var player = this.players[id];
       player.extrapolate();
       
-      if(id != this._playerId || !this.player().direction) {
-        player.correct(
-          this.correct_speed || player.speed || WW3.DEFAULT_CORRECT_SPEED,
-          this.correct_rot_speed || player.rot_speed || WW3.DEFAULT_CORRECT_ROT_SPEED
-        );
-      }
+      player.correct(
+        this.correct_speed || player.speed || WW3.DEFAULT_CORRECT_SPEED,
+        this.correct_rot_speed || player.rot_speed || WW3.DEFAULT_CORRECT_ROT_SPEED
+      );
 
       this._drawPlayer(ctx, player);
       player.refresh();

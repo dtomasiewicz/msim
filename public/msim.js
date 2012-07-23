@@ -188,17 +188,20 @@ MSim.prototype = {
   _set: function(attr, value) {
     var player = this.player();
     player.update(attr, value);
-    var bench = {x: player.x, y: player.y, h: player.heading};
+    var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
     console.log('set bench x = '+bench.x);
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
-      console.log('real x = '+real.x);
-      console.log('bench x = '+bench.x);
-      player.setError(
-        real.x - bench.x,
-        real.y - bench.y,
-        real.heading - bench.h
-      );
+      if(bench == player.bench) {
+        console.log('real x = '+real.x);
+        console.log('bench x = '+bench.x);
+        player.setError(
+          real.x - bench.x,
+          real.y - bench.y,
+          real.heading - bench.h
+        );
+        player.bench = null;
+      }
     });
   },
 

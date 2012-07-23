@@ -58,8 +58,14 @@ MSim.mod = function(a, b) {
 };
 
 MSim.graduate = function(value, delta) {
-  var sign = Math.round(value/Math.abs(value));
-  return Math.abs(value) > delta ? delta*sign : value;
+  console.log('grad value = '+value);
+  console.log('grad delta = '+delta);
+  var aValue = Math.abs(value);
+  if(aValue > delta) {
+    return delta*Math.round(value/aValue);
+  } else {
+    return value;
+  }
 };
 
 MSim.prototype = {
@@ -70,18 +76,6 @@ MSim.prototype = {
 
   delay: function() {
     return this.player().latency/2.0;
-  },
-
-  pastDelay: function() {
-    var now = new Date();
-    now.setTime(now.getTime() - this.delay()*1000);
-    return now;
-  },
-
-  futureDelay: function() {
-    var now = new Date();
-    now.setTime(now.getTime() + this.delay()*1000);
-    return now;
   },
 
   width: function() {
@@ -344,6 +338,8 @@ MSimPlayer.prototype = {
       this._error = {x: x, y: y, h: h};
       console.log('set error x = '+this._error.x);
       this._corrected = new Date();
+    } else {
+      console.log('no errors');
     }
   },
   
@@ -371,13 +367,16 @@ MSimPlayer.prototype = {
 
       if(this._error.x || this._error.y) {
         var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
+        console.log('correction factor = '+factor);
+
         var disp = speed*dTime;
+        console.log('correction disp = '+disp);
         var dx = MSim.graduate(this._error.x, factor*disp);
         var dy = MSim.graduate(this._error.y, (1-factor)*disp);
 
         this.x = this.game.xPos(this.x + dx);
         this._error.x -= dx;
-        console.log('correct dx = '+this.dx)
+        console.log('correct dx = '+dx)
         console.log('error    x = '+this._error.x);
 
         this.y = this.game.yPos(this.y + dy);

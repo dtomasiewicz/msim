@@ -189,6 +189,7 @@ MSim.prototype = {
     var player = this.player();
     player.update(attr, value);
     var bench = {x: player.x, y: player.y, h: player.heading};
+    player.setError(0, 0, 0); // todo cleaner place to put this?
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
       console.log('real x = '+real.x);

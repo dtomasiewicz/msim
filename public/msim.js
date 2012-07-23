@@ -58,8 +58,6 @@ MSim.mod = function(a, b) {
 };
 
 MSim.graduate = function(value, delta) {
-  console.log('grad value = '+value);
-  console.log('grad delta = '+delta);
   var aValue = Math.abs(value);
   if(aValue > delta) {
     return delta*Math.round(value/aValue);
@@ -193,6 +191,8 @@ MSim.prototype = {
     var bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
+      console.log('real x = '+real.x);
+      console.log('bench x = '+bench.x);
       player.setError(
         real.x - bench.x,
         real.y - bench.y,
@@ -367,16 +367,15 @@ MSimPlayer.prototype = {
 
       if(this._error.x || this._error.y) {
         var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
-        console.log('correction factor = '+factor);
 
         var disp = speed*dTime;
-        console.log('correction disp = '+disp);
         var dx = MSim.graduate(this._error.x, factor*disp);
+        console.log('correct dx = '+dx)
         var dy = MSim.graduate(this._error.y, (1-factor)*disp);
 
         this.x = this.game.xPos(this.x + dx);
+        console.log('new x = '+this.x);
         this._error.x -= dx;
-        console.log('correct dx = '+dx)
         console.log('error    x = '+this._error.x);
 
         this.y = this.game.yPos(this.y + dy);

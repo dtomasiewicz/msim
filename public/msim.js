@@ -342,6 +342,7 @@ MSimPlayer.prototype = {
 
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
+      console.log('set error x = '+this._error.x);
       this._corrected = new Date();
     }
   },
@@ -369,9 +370,6 @@ MSimPlayer.prototype = {
       var dTime = (now - this._corrected)/1000;
 
       if(this._error.x || this._error.y) {
-        console.log('correcting x,y');
-        console.log(this._error.x);
-        console.log(this._error.y);
         var factor = Math.abs(this._error.x)/(Math.abs(this._error.x)+Math.abs(this._error.y));
         var disp = speed*dTime;
         var dx = MSim.graduate(this._error.x, factor*disp);
@@ -379,6 +377,8 @@ MSimPlayer.prototype = {
 
         this.x = this.game.xPos(this.x + dx);
         this._error.x -= dx;
+        console.log('correct dx = '+this.dx)
+        console.log('error    x = '+this._error.x);
 
         this.y = this.game.yPos(this.y + dy);
         this._error.y -= dy;

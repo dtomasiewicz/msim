@@ -194,9 +194,9 @@ MSim.prototype = {
       console.log('real x = '+real.x);
       console.log('bench x = '+bench.x);
       player.setError(
-        real.x - bench.x,
-        real.y - bench.y,
-        real.heading - bench.h
+        bench.x - real.x,
+        bench.y - real.y,
+        bench.heading - real.h
       );
     });
   },

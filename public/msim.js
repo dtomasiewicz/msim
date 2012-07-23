@@ -191,6 +191,7 @@ MSim.prototype = {
     var bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
+      player.extrapolate();
       console.log('real x = '+real.x);
       console.log('bench x = '+bench.x);
       player.setError(

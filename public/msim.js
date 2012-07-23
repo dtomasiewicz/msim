@@ -191,7 +191,6 @@ MSim.prototype = {
     var bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
-      player.extrapolate();
       console.log('real x = '+real.x);
       console.log('bench x = '+bench.x);
       player.setError(
@@ -400,6 +399,9 @@ MSimPlayer.prototype = {
     var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
 
     this.x = this.game.xPos(this.x + delta.dX);
+    if(delta.dX != 0) {
+      console.log('(ext) new x = '+this.x);
+    }
     this.y = this.game.yPos(this.y + delta.dY);
     this.heading = MSim.mod(this.heading + delta.dH, 2*Math.PI);
     this._updated = now;

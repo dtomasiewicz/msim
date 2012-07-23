@@ -189,12 +189,9 @@ MSim.prototype = {
     var player = this.player();
     player.update(attr, value);
     var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
-    console.log('set bench x = '+bench.x);
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
       if(bench == player.bench) {
-        console.log('real x = '+real.x);
-        console.log('bench x = '+bench.x);
         player.setError(
           real.x - bench.x,
           real.y - bench.y,
@@ -340,10 +337,7 @@ MSimPlayer.prototype = {
 
     if(x || y || h) {
       this._error = {x: x, y: y, h: h};
-      console.log('set error x = '+this._error.x);
       this._corrected = new Date();
-    } else {
-      console.log('no errors');
     }
   },
   
@@ -374,14 +368,10 @@ MSimPlayer.prototype = {
 
         var disp = speed*dTime;
         var dx = MSim.graduate(this._error.x, factor*disp);
-        console.log('correct dx = '+dx)
         var dy = MSim.graduate(this._error.y, (1-factor)*disp);
 
-        console.log('old x = '+this.x);
         this.x = this.game.xPos(this.x + dx);
-        console.log('new x = '+this.x);
         this._error.x -= dx;
-        console.log('error    x = '+this._error.x);
 
         this.y = this.game.yPos(this.y + dy);
         this._error.y -= dy;
@@ -404,9 +394,6 @@ MSimPlayer.prototype = {
     var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
 
     this.x = this.game.xPos(this.x + delta.dX);
-    if(delta.dX != 0) {
-      console.log('(ext) new x = '+this.x);
-    }
     this.y = this.game.yPos(this.y + delta.dY);
     this.heading = MSim.mod(this.heading + delta.dH, 2*Math.PI);
     this._updated = now;

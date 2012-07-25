@@ -57,10 +57,10 @@ MSim.mod = function(a, b) {
   return ((a%b)+b)%b;
 };
 
-MSim.graduate = function(value, delta) {
-  var aValue = Math.abs(value);
-  if(aValue > delta) {
-    return delta*Math.round(value/aValue);
+MSim.graduate = function(value, maxDelta) {
+  var abs = Math.abs(value);
+  if(abs > maxDelta) {
+    return maxDelta*Math.round(value/abs);
   } else {
     return value;
   }
@@ -72,8 +72,12 @@ MSim.prototype = {
     return this.players[this._playerId];
   },
 
+  latency: function() {
+    return this.player().latency;
+  },
+
   delay: function() {
-    return this.player().latency/2.0;
+    return this.latency()/2.0;
   },
 
   width: function() {
@@ -125,22 +129,15 @@ MSim.prototype = {
       if(KeyCodes.isArrow(e.keyCode)) {
         e.preventDefault();
 
-        // some browsers fire keydown for each "press"-- we only want the first
+        // some browsers fire keydown for each "press"-- we only want the first, so
+        // we need to keep track of which keys are down
         if(!self._keys[e.keyCode]) {
           self._keys[e.keyCode] = true;
 
           if(e.keyCode == KeyCodes.UP) {
-            if(self._keys[KeyCodes.DOWN]) {
-              self._stop();
-            } else {
-              self._forward();
-            }
+            self._set('direction', self._keys[KeyCodes.DOWN] ? 0 : 1);
           } else if(e.keyCode == KeyCodes.DOWN) {
-            if(self._keys[KeyCodes.UP]) {
-              self._stop();
-            } else {
-              self._backward();
-            }
+            self._set('direction', self._keys[KeyCodes.UP] ? 0 : -1);
           } else if(e.keyCode == KeyCodes.LEFT) {
             self._rotate(self._keys[KeyCodes.RIGHT] ? 0 : -1);
           } else {
@@ -158,17 +155,9 @@ MSim.prototype = {
           self._keys[e.keyCode] = false;
 
           if(e.keyCode == KeyCodes.UP) {
-            if(self._keys[KeyCodes.DOWN]) {
-              self._backward();
-            } else {
-              self._stop();
-            }
+            self._set('direction', self._keys[KeyCodes.DOWN] ? -1 : 0);
           } else if(e.keyCode == KeyCodes.DOWN) {
-            if(self._keys[KeyCodes.UP]) {
-              self._forward();
-            } else {
-              self._stop();
-            }
+            self._set('direction', self._keys[KeyCodes.UP] ? 1 : 0);
           } else if(e.keyCode == KeyCodes.LEFT) {
             self._rotate(self._keys[KeyCodes.RIGHT] ? 1 : 0);
           } else {
@@ -185,12 +174,14 @@ MSim.prototype = {
     })();
   },
 
+  // set an attribute for the current player, sending the action to the server
   _set: function(attr, value) {
     var player = this.player();
     player.update(attr, value);
     var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
+      this.player().latency = real.latency;
       if(bench == player.bench) {
         player.setError(
           real.x - bench.x,
@@ -288,7 +279,7 @@ MSim.prototype = {
         if(player.id == this._playerId) {
           player.latency = data.latency;
         } else {
-          player.interpolate(data, this.compensate ? this.latency() : 0);
+          player.interpolate(data, this.compensate ? this.delay() : 0);
           delete data.x;
           delete data.y;
           delete data.heading;

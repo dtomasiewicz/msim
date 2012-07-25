@@ -1,0 +1,47 @@
+\documentclass{article}
+
+\begin{document}
+
+\title{Error Correction in MoveSim}
+\author{Daniel Tomasiewicz}
+\maketitle
+
+\begin{abstract}
+Variations in network latency cause MoveSim's client-side extrapolation routines to produce positions and headings that are inconsistent with those of the authoritative server, with the margin of error depending on the level and consistency of this latency.
+
+This document describes MoveSim's strategies for unobtrusively identifying and correcting these errors.
+\end{abstract}
+
+\section{Identifying Errors in the Client Player}
+
+Errors in the position and heading of the client player result from the client-server delay when movement or rotation begins and ends.
+
+\subsection*{Example Problem}
+
+Bob's character is moving forward and wants to turn. He presses the RIGHT arrow key and a \emph{rot\_speed} instruction is sent to the server at $t=0$. Let $d_s$ be the time it takes for this message to arrive at the server. In order for Bob's action to be reflected immediately on his screen, his new position in the following frames is calculated as if $d_s=0$.
+
+Upon receiving the instruction, the server will respond with Bob's new state, including the authoritative (real) position at the time the instruction was received. Let $d_c$ be the time it takes for this response to reach the client. Upon receiving this response at $t=d_s+d_c$ (one round trip), the position of Bob's character must be corrected to account for the distance travelled between $t=0$ and $t=d_s$.
+
+\subsection*{Solution: Benchmarking}
+
+Before sending a movement instruction to the server, a copy (or \emph{benchmark}) of the player's current position  and heading $(x_i, y_i, h_i)$ is stored. When the server's response is received at $t=d_s+d_c$, the included position and heading $(x_j, y_j, h_j)$ are compared to the benchmark, and the client player's error deltas are set to $(x_j-x_i, y_j-y_i, h_j-h_i)$. This comparison is referred to as \emph{debenching}.
+
+Only one action may be benchmarked at a time to avoid doubling-up of error deltas in high-latency cases. If a second action is performed before a response is received for an earlier action, the earlier benchmark is discarded and its response (when it is received) will not be debenched.
+
+\section{Identifying Errors in Remote Players}
+
+Errors in the position and heading of remote players result from the server-client delay when being notified of remote player actions.
+
+\subsection*{Example Problem}
+
+(todo)
+
+\subsection*{Solution: Interpolation}
+
+(todo)
+
+\section{Correcting Identified Errors}
+
+(todo)
+
+\end{document}

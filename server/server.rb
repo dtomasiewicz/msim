@@ -38,6 +38,7 @@ class Avatar
   end
 
   def data
+    compute!
     {i: @id, x: @x, y: @y, d: @direction, s: @speed, r: @rot_speed, h: @heading, l: @latency}
   end
 
@@ -135,6 +136,12 @@ class World
 
   def react_rot_speed(avatar, rot_speed)
     avatar.rot_speed = rot_speed.to_f
+    notify_except avatar, :data, avatar.data
+    [:success, avatar.data]
+  end
+
+  def react_heading(avatar, heading)
+    avatar.heading = heading.to_f
     notify_except avatar, :data, avatar.data
     [:success, avatar.data]
   end

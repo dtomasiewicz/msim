@@ -14,11 +14,19 @@ var MSim = function(options) {
 
   this.display = {
     canvas: $('<canvas class="msim-canvas" tabindex="1"></canvas>').get(0),
-    players: $('<ul class="msim-players"></ul>').get(0)
+    players: $('<ul class="msim-players"></ul>').get(0),
+    btnup: $('<button>up</button>').get(0),
+    btndown: $('<button>down</button>').get(0),
+    btnleft: $('<button>left</button>').get(0),
+    btnright: $('<button>right</button>').get(0)
   };
 
   if('target' in options) {
-    $(options.target).append(this.display.canvas, this.display.players);
+    $(options.target).append(
+      this.display.canvas,
+      $('<div></div').append(this.display.btnup, this.display.btndown, this.display.btnleft, this.display.btnright),
+      this.display.players
+    );
     this.display.canvas.focus();
   }
 
@@ -165,7 +173,23 @@ MSim.prototype = {
           }
         }
       }
-    }
+    };
+
+    self.display.btnup.onclick = function() {
+      self._set('direction', self.player().direction == 1 ? 0 : 1);
+    };
+
+    self.display.btndown.onclick = function() {
+      self._set('direction', self.player().direction == -1 ? 0 : -1);
+    };
+
+    self.display.btnleft.onclick = function() {
+      self._set('heading', MSim.mod(self.player().heading-0.25*Math.PI, 2*Math.PI));
+    };
+
+    self.display.btnright.onclick = function() {
+      self._set('heading', MSim.mod(self.player().heading+0.25*Math.PI, 2*Math.PI));
+    };
 
     var redraw;
     (redraw = function () {

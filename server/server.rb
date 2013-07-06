@@ -3,15 +3,15 @@ require 'gamz/server'
 
 class Avatar
 
-  attr_reader :id, :client, :direction, :x, :y, :heading, :speed, :rot_speed
+  attr_reader :world, :id, :client, :direction, :x, :y, :h, :speed, :rot_speed
   attr_accessor :latency
 
   def initialize(world, id)
     @world = world
     @id = id
     @direction = 0
-    @x, @y = 0, 0
-    @heading = 0.0 # radians
+    @x, @y = 0.0, 0.0
+    @h = 0.0 # radians
     @rot_speed = 0.0
     @speed = 200 # per second
     @updated = Time.now
@@ -22,9 +22,9 @@ class Avatar
     @direction = 0
   end
 
-  def heading=(heading)
+  def h=(heading)
     compute!
-    @heading = heading
+    @h = heading
   end
 
   def direction=(direction)
@@ -38,19 +38,15 @@ class Avatar
   end
 
   def data
-    compute!
-    {i: @id, x: @x, y: @y, d: @direction, s: @speed, r: @rot_speed, h: @heading, l: @latency}
+    instant.merge! i: @id, d: @direction, s: @speed, r: @rot_speed, l: @latency
   end
 
-  private
-
-  # computes the current coordinates
-  def compute!
-    now = Time.now
-    elapsed = now-@updated
+  # computes the coordinates/heading at the given time
+  def instant(time = Time.now)
+    elapsed = time-@updated
 
     dx = dy = dh = 0.0
-    sin_h, cos_h = Math.sin(@heading), Math.cos(@heading)
+    sin_h, cos_h = Math.sin(@h), Math.cos(@h)
 
     if @rot_speed != 0.0
       dh = @rot_speed*elapsed
@@ -59,7 +55,7 @@ class Avatar
       if @direction != 0
         dh *= @direction # invert turning when moving backwards
         radius = @speed/@rot_speed
-        l = Math::PI/2-@heading-dh
+        l = Math::PI/2-@h-dh
         dx = radius * (Math.cos(l) - sin_h)
         dy = radius * (cos_h - Math.sin(l))
       end
@@ -69,10 +65,54 @@ class Avatar
       dy = disp*sin_h;
     end
 
-    @x = [0.0, [@world.width.to_f, @x + dx].min].max
-    @y = [0.0, [@world.height.to_f, @y + dy].min].max
-    @heading = (@heading + dh) % (2*Math::PI)
-    @updated = now
+    {
+      x: @world.x_coord(@x+dx),
+      y: @world.y_coord(@y+dy),
+      h: (@h + dh) % (2*Math::PI)
+    }
+  end
+
+  private
+
+  # compute the coordinates/heading and writes them directly
+  def compute!(time = Time.now)
+    d = instant time
+    @x, @y, @h, @updated = d[:x], d[:y], d[:h], time
+  end
+
+end
+
+class Missile
+
+  attr_reader :avatar, :x, :y, :h, :speed
+
+  def initialize(avatar, id, speed)
+    avatar.compute!
+    @avatar = avatar
+    @id = id
+    @x = avatar.x
+    @y = avatar.y
+    @h = avatar.h
+    @speed = speed
+    @updated = Time.now
+  end
+
+  def data
+    compute!
+    {i: @id, a: @avatar.id, x: @x, y: @y, s: @speed, h: @h}
+  end
+
+  def instant(time = Time.now)
+    elapsed = time-@updated
+
+    dx = dy = 0.0
+    sin_h, cos_h = Math.sin(@h), Math.cos(@h)
+
+    disp = @direction*@speed*elapsed
+    dx = disp*cos_h;
+    dy = disp*sin_h;
+
+    {x: @avatar.world.x_coord(@x+dx), y: @avatar.world.y_coord(@y+dy)}
   end
 
 end
@@ -88,6 +128,14 @@ class World
     @avatars = {}
     @clients = {}
     @last_id = 0
+  end
+
+  def x_coord(value)
+    (value > width ? width : (value < 0 ? 0 : value)).to_f
+  end
+
+  def y_coord(value)
+    (value > height ? height : (value < 0 ? 0 : value)).to_f
   end
 
   def notify_all(*args)
@@ -141,9 +189,13 @@ class World
   end
 
   def react_heading(avatar, heading)
-    avatar.heading = heading.to_f
+    avatar.h = heading.to_f
     notify_except avatar, :data, avatar.data
     [:success, avatar.data]
+  end
+
+  def react_fire(avatar)
+
   end
 
   private

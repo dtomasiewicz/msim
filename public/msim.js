@@ -32,8 +32,7 @@ var MSim = function(options) {
 
   this.rot_speed = Math.PI;
   this.redraw_rate = 25;
-  this.correct_speed = 200;
-  this.correct_rot_speed = Math.PI;
+  this.correct_speed = 20;
   this.compensate = false;
 
   this.players = null;
@@ -56,8 +55,6 @@ var MSim = function(options) {
 
   this._gamz.open({resource: '/gamz', secure: true});
 };
-
-MSim.DEFAULT_CORRECT_SPEED = 200;
 
 // fix for JS's modulus of negative numbers
 MSim.mod = function(a, b) {
@@ -183,11 +180,11 @@ MSim.prototype = {
     };
 
     self.display.btnleft.onclick = function() {
-      self._set('heading', MSim.mod(self.player().heading-0.25*Math.PI, 2*Math.PI));
+      self._set('heading', MSim.mod(self.player().h-0.25*Math.PI, 2*Math.PI));
     };
 
     self.display.btnright.onclick = function() {
-      self._set('heading', MSim.mod(self.player().heading+0.25*Math.PI, 2*Math.PI));
+      self._set('heading', MSim.mod(self.player().h+0.25*Math.PI, 2*Math.PI));
     };
 
     var redraw;
@@ -204,7 +201,7 @@ MSim.prototype = {
 
     // for error correction, use the values from BEFORE the request was sent to
     // approximately cancel latency
-    var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
+    var bench = player.bench = {x: player.x, y: player.y, h: player.h};
 
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
@@ -213,7 +210,7 @@ MSim.prototype = {
         player.setError(
           real.x - bench.x,
           real.y - bench.y,
-          real.heading - bench.h
+          real.h - bench.h
         );
         player.bench = null;
       }
@@ -259,7 +256,7 @@ MSim.prototype = {
   },
 
   _drawPlayer: function(ctx, player) {
-    var h = player.heading;
+    var h = player.h;
     var x = Math.round(player.x);
     var y = Math.round(player.y);
 
@@ -306,7 +303,7 @@ MSim.prototype = {
           player.interpolate(data, this.compensate ? this.delay() : 0);
           delete data.x;
           delete data.y;
-          delete data.heading;
+          delete data.h;
           this.players[data.id].update(data);
         }
       }
@@ -342,23 +339,23 @@ MSimPlayer.prototype = {
     }
   },
 
-  setError: function(x, y, heading) {
+  setError: function(x, y, h) {
     // when not rotating, heading differences are reflected immediately, NOT
     // through error correction. this prevents inaccurate extrapolation.
     if(this.rot_speed == 0) {
-      this.heading = MSim.mod(this.heading + heading, 2*Math.PI);
-      heading = 0;
+      this.h = MSim.mod(this.h + h, 2*Math.PI);
+      h = 0;
     }
 
     // rotate in whichever direction is closest to the correct heading
-    if(heading > Math.PI) {
-      heading -= 2*Math.PI;
-    } else if(heading < -Math.PI) {
-      heading += 2*Math.PI;
+    if(h > Math.PI) {
+      h -= 2*Math.PI;
+    } else if(h < -Math.PI) {
+      h += 2*Math.PI;
     }
 
-    if(x != 0 || y != 0 || heading != 0) {
-      this._error = {x: x, y: y, heading: heading, rot_speed: Math.abs(this.rot_speed)};
+    if(x != 0 || y != 0 || h != 0) {
+      this._error = {x: x, y: y, h: h, rot_speed: Math.abs(this.rot_speed)};
       this._corrected = new Date();
     } else {
       this._error = this._corrected = null;
@@ -375,7 +372,7 @@ MSimPlayer.prototype = {
     this.setError(
       this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
       this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
-      MSim.mod(data.heading + remote.dH, 2*Math.PI) - this.heading
+      MSim.mod(data.h + remote.dH, 2*Math.PI) - this.h
     );
 
     return this;
@@ -400,10 +397,10 @@ MSimPlayer.prototype = {
         this._error.y -= dy;
       }
 
-      if(this._error.heading) {
-        var dh = MSim.graduate(this._error.heading, this._error.rot_speed*dTime);
-        this.heading = MSim.mod(this.heading + dh, 2*Math.PI);
-        this._error.heading -= dh;
+      if(this._error.h) {
+        var dh = MSim.graduate(this._error.h, this._error.rot_speed*dTime);
+        this.h = MSim.mod(this.h + dh, 2*Math.PI);
+        this._error.h -= dh;
       }
 
       this._corrected = now;
@@ -418,7 +415,7 @@ MSimPlayer.prototype = {
     
     this.x = this.game.xPos(this.x + delta.dX);
     this.y = this.game.yPos(this.y + delta.dY);
-    this.heading = MSim.mod(this.heading + delta.dH, 2*Math.PI);
+    this.h = MSim.mod(this.h + delta.dH, 2*Math.PI);
     this._updated = now;
    
     return this;
@@ -428,7 +425,7 @@ MSimPlayer.prototype = {
     if(this._li) {
       $(this._li).text(
         '#'+this.id+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
-        (Math.round(this.heading*10)/10)+' rad @ '+
+        (Math.round(this.h*10)/10)+' rad @ '+
         (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
         Math.round(this.latency*1000)+' ms'
       );
@@ -463,8 +460,8 @@ MSimPlayer.extrapolate = function(initial, dTime) {
     dH: 0.0
   };
 
-  var sinH = Math.sin(initial.heading);
-  var cosH = Math.cos(initial.heading);
+  var sinH = Math.sin(initial.h);
+  var cosH = Math.cos(initial.h);
 
   if(initial.rot_speed != 0.0) {
     delta.dH = initial.rot_speed*dTime;
@@ -473,7 +470,7 @@ MSimPlayer.extrapolate = function(initial, dTime) {
     if(initial.direction) {
       delta.dH *= initial.direction; // invert turning when moving backwards
       var radius = initial.speed/initial.rot_speed;
-      var l = Math.PI/2-initial.heading-delta.dH;
+      var l = Math.PI/2-initial.h-delta.dH;
       delta.dX = radius * (Math.cos(l) - sinH);
       delta.dY = radius * (cosH - Math.sin(l));
     }
@@ -496,10 +493,10 @@ MSimPlayer.normalizeData = function(data) {
     if('i' in data) norm.id = data.i;
     if('x' in data) norm.x = data.x;
     if('y' in data) norm.y = data.y;
+    if('h' in data) norm.h = data.h;
     if('d' in data) norm.direction = data.d;
     if('s' in data) norm.speed = data.s;
     if('r' in data) norm.rot_speed = data.r;
-    if('h' in data) norm.heading = data.h;
     if('l' in data) norm.latency = data.l;
     return norm;
   }

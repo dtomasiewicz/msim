@@ -46,7 +46,7 @@ var MSim = function(options) {
     self._opened();
   };
 
-  this._gamz.open({port: 10001});
+  this._gamz.open({resource: '/gamz', secure: true});
 };
 
 MSim.DEFAULT_CORRECT_SPEED = 200;
@@ -181,7 +181,7 @@ MSim.prototype = {
     var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
-      this.player().latency = real.latency;
+      player.latency = real.latency;
       if(bench == player.bench) {
         player.setError(
           real.x - bench.x,

@@ -46,13 +46,13 @@ GamzClient.prototype = {
     } else {
       var scheme, host, port, resource;
       options = options || {};
-      port = options.port || 80;
+      port = options.port;
       if(options.secure) {
         scheme = 'wss';
-        port = port != 443 ? ':'+port : '';
+        port = port && port != 443 ? ':'+port : '';
       } else {
         scheme = 'ws';
-        port = port != 80 ? ':'+port : '';
+        port = port && port != 80 ? ':'+port : '';
       }
       host = options.host || window.location.hostname;
       resource = options.resource || '';

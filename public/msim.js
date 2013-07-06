@@ -38,19 +38,21 @@ var MSim = function(options) {
   this.players = null;
   this._playerId = null;
 
+  // track the pressed state of keys
   this._keys = {};
   this._keys[KeyCodes.LEFT] = this._keys[KeyCodes.RIGHT] = 
     this._keys[KeyCodes.UP] = this._keys[KeyCodes.DOWN] = false;
+
   this._gamz = new GamzClient();
 
-  var self = this;
+  var msim = this;
 
   this._gamz.onnotify = function(id) {
-    self._notifyHandlers[id].apply(self, Array.prototype.slice.call(arguments, 1));
+    msim._notifyHandlers[id].apply(msim, Array.prototype.slice.call(arguments, 1));
   };
 
   this._gamz.onopen = function() {
-    self._opened();
+    msim._opened();
   };
 
   this._gamz.open({resource: '/gamz', secure: true});
@@ -115,82 +117,82 @@ MSim.prototype = {
   },
 
   _opened: function() {
-    var self = this;
+    var msim = this;
 
     this._gamz.act('info', [], function(width, height, players, playerId) {
-      self.display.canvas.width = width;
-      self.display.canvas.height = height;
-      self._playerId = playerId;
+      msim.display.canvas.width = width;
+      msim.display.canvas.height = height;
+      msim._playerId = playerId;
 
-      self.players = {};
+      msim.players = {};
       for(var i = 0; i < players.length; i++) {
         var data = MSimPlayer.normalizeData(players[i]);
-        self._addPlayer(new MSimPlayer(self, data));
+        msim._addPlayer(new MSimPlayer(msim, data));
       }
     });
 
-    self.display.canvas.onkeydown = function(e) {
+    msim.display.canvas.onkeydown = function(e) {
       if(KeyCodes.isArrow(e.keyCode)) {
         e.preventDefault();
 
         // some browsers fire keydown for each "press"-- we only want the first, so
         // we need to keep track of which keys are down
-        if(!self._keys[e.keyCode]) {
-          self._keys[e.keyCode] = true;
+        if(!msim._keys[e.keyCode]) {
+          msim._keys[e.keyCode] = true;
 
           if(e.keyCode == KeyCodes.UP) {
-            self._set('direction', self._keys[KeyCodes.DOWN] ? 0 : 1);
+            msim._set('direction', msim._keys[KeyCodes.DOWN] ? 0 : 1);
           } else if(e.keyCode == KeyCodes.DOWN) {
-            self._set('direction', self._keys[KeyCodes.UP] ? 0 : -1);
+            msim._set('direction', msim._keys[KeyCodes.UP] ? 0 : -1);
           } else if(e.keyCode == KeyCodes.LEFT) {
-            self._rotate(self._keys[KeyCodes.RIGHT] ? 0 : -1);
+            msim._rotate(msim._keys[KeyCodes.RIGHT] ? 0 : -1);
           } else {
-            self._rotate(self._keys[KeyCodes.LEFT] ? 0 : 1);
+            msim._rotate(msim._keys[KeyCodes.LEFT] ? 0 : 1);
           }
         }
       }
     };
 
-    self.display.canvas.onkeyup = function(e) {
+    msim.display.canvas.onkeyup = function(e) {
       if(KeyCodes.isArrow(e.keyCode)) {
         e.preventDefault();
         
-        if(self._keys[e.keyCode]) {
-          self._keys[e.keyCode] = false;
+        if(msim._keys[e.keyCode]) {
+          msim._keys[e.keyCode] = false;
 
           if(e.keyCode == KeyCodes.UP) {
-            self._set('direction', self._keys[KeyCodes.DOWN] ? -1 : 0);
+            msim._set('direction', msim._keys[KeyCodes.DOWN] ? -1 : 0);
           } else if(e.keyCode == KeyCodes.DOWN) {
-            self._set('direction', self._keys[KeyCodes.UP] ? 1 : 0);
+            msim._set('direction', msim._keys[KeyCodes.UP] ? 1 : 0);
           } else if(e.keyCode == KeyCodes.LEFT) {
-            self._rotate(self._keys[KeyCodes.RIGHT] ? 1 : 0);
+            msim._rotate(msim._keys[KeyCodes.RIGHT] ? 1 : 0);
           } else {
-            self._rotate(self._keys[KeyCodes.LEFT] ? -1 : 0);
+            msim._rotate(msim._keys[KeyCodes.LEFT] ? -1 : 0);
           }
         }
       }
     };
 
-    self.display.btnup.onclick = function() {
-      self._set('direction', self.player().direction == 1 ? 0 : 1);
+    msim.display.btnup.onclick = function() {
+      msim._set('direction', msim.player().direction == 1 ? 0 : 1);
     };
 
-    self.display.btndown.onclick = function() {
-      self._set('direction', self.player().direction == -1 ? 0 : -1);
+    msim.display.btndown.onclick = function() {
+      msim._set('direction', msim.player().direction == -1 ? 0 : -1);
     };
 
-    self.display.btnleft.onclick = function() {
-      self._set('heading', MSim.mod(self.player().h-0.25*Math.PI, 2*Math.PI));
+    msim.display.btnleft.onclick = function() {
+      msim._set('heading', MSim.mod(msim.player().h-0.25*Math.PI, 2*Math.PI));
     };
 
-    self.display.btnright.onclick = function() {
-      self._set('heading', MSim.mod(self.player().h+0.25*Math.PI, 2*Math.PI));
+    msim.display.btnright.onclick = function() {
+      msim._set('heading', MSim.mod(msim.player().h+0.25*Math.PI, 2*Math.PI));
     };
 
     var redraw;
     (redraw = function () {
-      self._redraw();
-      setTimeout(redraw, self.redraw_rate);
+      msim._redraw();
+      setTimeout(redraw, msim.redraw_rate);
     })();
   },
 
@@ -500,4 +502,34 @@ MSimPlayer.normalizeData = function(data) {
     if('l' in data) norm.latency = data.l;
     return norm;
   }
+};
+
+var MSimMissile = function(player, data) {
+  this.player = player;
+
+  for(var attr in data) {
+    this[attr] = data[attr];
+  }
+
+  this._updated = new Date();
+};
+
+MSimMissile.extrapolate = function(initial, dTime) {
+  var disp = initial.direction*initial.speed*dTime;
+  return {dX: disp*Math.cos(initial.h), dY: disp*Math.sin(initial.h)};
+};
+
+MSimMissile.prototype = {
+
+  extrapolate: function() {
+    var now = new Date();
+    var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
+    
+    this.x = this.player.game.xPos(this.x + delta.dX);
+    this.y = this.player.game.yPos(this.y + delta.dY);
+    this._updated = now;
+   
+    return this;
+  }
+
 };

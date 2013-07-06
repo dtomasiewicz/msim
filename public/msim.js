@@ -58,7 +58,6 @@ var MSim = function(options) {
 };
 
 MSim.DEFAULT_CORRECT_SPEED = 200;
-MSim.DEFAULT_CORRECT_ROT_SPEED = Math.PI;
 
 // fix for JS's modulus of negative numbers
 MSim.mod = function(a, b) {
@@ -202,7 +201,11 @@ MSim.prototype = {
   _set: function(attr, value) {
     var player = this.player();
     player.update(attr, value);
+
+    // for error correction, use the values from BEFORE the request was sent to
+    // approximately cancel latency
     var bench = player.bench = {x: player.x, y: player.y, h: player.heading};
+
     this._gamz.act(attr, [value], function(real) {
       real = MSimPlayer.normalizeData(real);
       player.latency = real.latency;
@@ -248,10 +251,7 @@ MSim.prototype = {
       var player = this.players[id];
       player.extrapolate();
       
-      player.correct(
-        this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED,
-        this.correct_rot_speed || player.rot_speed || MSim.DEFAULT_CORRECT_ROT_SPEED
-      );
+      player.correct(this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED);
 
       this._drawPlayer(ctx, player);
       player.refresh();
@@ -342,17 +342,26 @@ MSimPlayer.prototype = {
     }
   },
 
-  setError: function(x, y, h) {
-    // rotate in whichever direction is closest to the correct heading
-    if(h > Math.PI) {
-      h -= 2*Math.PI;
-    } else if(h < -Math.PI) {
-      h += 2*Math.PI;
+  setError: function(x, y, heading) {
+    // when not rotating, heading differences are reflected immediately, NOT
+    // through error correction. this prevents inaccurate extrapolation.
+    if(this.rot_speed == 0) {
+      this.heading = MSim.mod(this.heading + heading, 2*Math.PI);
+      heading = 0;
     }
 
-    if(x || y || h) {
-      this._error = {x: x, y: y, h: h};
+    // rotate in whichever direction is closest to the correct heading
+    if(heading > Math.PI) {
+      heading -= 2*Math.PI;
+    } else if(heading < -Math.PI) {
+      heading += 2*Math.PI;
+    }
+
+    if(x != 0 || y != 0 || heading != 0) {
+      this._error = {x: x, y: y, heading: heading, rot_speed: Math.abs(this.rot_speed)};
       this._corrected = new Date();
+    } else {
+      this._error = this._corrected = null;
     }
   },
   
@@ -361,9 +370,8 @@ MSimPlayer.prototype = {
   // positions for simpler movement patterns.
   interpolate: function(data, latency) {
     this.extrapolate();
-
     var remote = latency ? MSimPlayer.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
-    
+
     this.setError(
       this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
       this.game.yPos(data.y + remote.dY) - this.game.yPos(this.y),
@@ -373,7 +381,7 @@ MSimPlayer.prototype = {
     return this;
   },
 
-  correct: function(speed, rot_speed) {
+  correct: function(speed) {
     if(this._error) {
       var now = new Date();
       var dTime = (now - this._corrected)/1000;
@@ -392,10 +400,10 @@ MSimPlayer.prototype = {
         this._error.y -= dy;
       }
 
-      if(this._error.h) {
-        var dh = MSim.graduate(this._error.h, rot_speed*dTime);
+      if(this._error.heading) {
+        var dh = MSim.graduate(this._error.heading, this._error.rot_speed*dTime);
         this.heading = MSim.mod(this.heading + dh, 2*Math.PI);
-        this._error.h -= dh;
+        this._error.heading -= dh;
       }
 
       this._corrected = now;
@@ -407,7 +415,7 @@ MSimPlayer.prototype = {
   extrapolate: function() {
     var now = new Date();
     var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
-
+    
     this.x = this.game.xPos(this.x + delta.dX);
     this.y = this.game.yPos(this.y + delta.dY);
     this.heading = MSim.mod(this.heading + delta.dH, 2*Math.PI);

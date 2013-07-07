@@ -3,6 +3,7 @@ var KeyCodes = {
   UP: 38,
   RIGHT: 39,
   DOWN: 40,
+  SPACE: 32,
 
   isArrow: function(keyCode) {
     return keyCode >= 37 && keyCode <= 40;
@@ -37,6 +38,8 @@ var MSim = function(options) {
 
   this.players = null;
   this._playerId = null;
+
+  this.missiles = null;
 
   // track the pressed state of keys
   this._keys = {};
@@ -116,20 +119,39 @@ MSim.prototype = {
     $(player._li).remove();
   },
 
+  _addMissile: function(missile) {
+    this.missiles[missile.id] = missile;
+  },
+
+  _removeMissile: function(missile) {
+    delete this.missiles[missile.id];
+  },
+
   _opened: function() {
     var msim = this;
 
-    this._gamz.act('info', [], function(width, height, players, playerId) {
+    this._gamz.act('info', [], function(width, height, players, playerId, missiles) {
       msim.display.canvas.width = width;
       msim.display.canvas.height = height;
       msim._playerId = playerId;
 
       msim.players = {};
       for(var i = 0; i < players.length; i++) {
-        var data = MSimPlayer.normalizeData(players[i]);
-        msim._addPlayer(new MSimPlayer(msim, data));
+        msim._addPlayer(new MSimPlayer(msim, players[i]));
+      }
+
+      msim.missiles = {};
+      for(var i = 0; i < missiles.length; i++) {
+        msim._addMissile(new MSimMissile(msim, missiles[i]))
       }
     });
+
+    msim.display.canvas.onkeypress = function(e) {
+      if(e.keyCode == KeyCodes.SPACE) {
+        e.preventDefault();
+        msim._fire();
+      }
+    };
 
     msim.display.canvas.onkeydown = function(e) {
       if(KeyCodes.isArrow(e.keyCode)) {
@@ -206,7 +228,6 @@ MSim.prototype = {
     var bench = player.bench = {x: player.x, y: player.y, h: player.h};
 
     this._gamz.act(attr, [value], function(real) {
-      real = MSimPlayer.normalizeData(real);
       player.latency = real.latency;
       if(bench == player.bench) {
         player.setError(
@@ -236,6 +257,10 @@ MSim.prototype = {
     this._set('rot_speed', direction*this.rot_speed);
   },
 
+  _fire: function() {
+    this._gamz.act('fire');
+  },
+
   _redraw: function() {
     // only draw if loaded
     if(this._playerId === null) return;
@@ -243,17 +268,24 @@ MSim.prototype = {
     var ctx = this.display.canvas.getContext('2d');
     ctx.clearRect(0, 0, this.display.canvas.width, this.display.canvas.height);
 
-    ctx.fillStyle = 'black';
+    // draw players
     for(var id in this.players) {
       ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
 
       var player = this.players[id];
       player.extrapolate();
-      
       player.correct(this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED);
-
-      this._drawPlayer(ctx, player);
       player.refresh();
+      this._drawPlayer(ctx, player);
+    }
+
+    // draw missiles
+    for(var id in this.missiles) {
+      ctx.fillStyle = 'red';
+
+      var missile = this.missiles[id];
+      missile.extrapolate();
+      this._drawMissile(ctx, missile);
     }
   },
 
@@ -278,15 +310,31 @@ MSim.prototype = {
     ctx.fill();
   },
 
+  _drawMissile: function(ctx, missile) {
+    var x = Math.round(missile.x);
+    var y = Math.round(missile.y);
+
+    ctx.beginPath();
+    ctx.arc(x, y, missile.r, 0, 2*Math.PI);
+    ctx.closePath();
+    ctx.fill();
+  },
+
   _notifyHandlers: {
 
     connect: function(data) {
-      data = MSimPlayer.normalizeData(data);
       this._addPlayer(new MSimPlayer(this, data));
     },
 
     disconnect: function(player) {
-      this._removePlayer(this.players[player.i]);
+      player = this.players[player.id];
+      for(var id in this.missiles) {
+        var m = this.missiles[id];
+        if(m.playerId == player.id) {
+          this._removeMissile(m);
+        }
+      }
+      this._removePlayer(player);
     },
 
     // updates player data
@@ -296,7 +344,7 @@ MSim.prototype = {
       }
 
       for(var i = 0; i < datas.length; i++) {
-        var data = MSimPlayer.normalizeData(datas[i]);
+        var data = datas[i];
         var player = this.players[data.id];
 
         if(player.id == this._playerId) {
@@ -309,6 +357,21 @@ MSim.prototype = {
           this.players[data.id].update(data);
         }
       }
+    },
+
+    missile: function(data) {
+      this._addMissile(new MSimMissile(this, data));
+    },
+
+    explosion: function(missileId, hitPlayerIds) {
+      var missile = this.missiles[missileId];
+      if(this.players[missile.playerId]) {
+        this.players[missile.playerId].score += hitPlayerIds.length;
+      }
+      for(var i = 0; i < hitPlayerIds.length; i++) {
+        this.players[hitPlayerIds[i]].score--;
+      }
+      this._removeMissile(missile);
     }
 
   }
@@ -426,7 +489,7 @@ MSimPlayer.prototype = {
   refresh: function() {
     if(this._li) {
       $(this._li).text(
-        '#'+this.id+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
+        '#'+this.id+' score '+this.score+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
         (Math.round(this.h*10)/10)+' rad @ '+
         (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
         Math.round(this.latency*1000)+' ms'
@@ -485,27 +548,8 @@ MSimPlayer.extrapolate = function(initial, dTime) {
   return delta;
 };
 
-// data sent over the wire is in an abbreviated format; this function will
-// convert it to the full format if necessary
-MSimPlayer.normalizeData = function(data) {
-  if('id' in data) {
-    return data;
-  } else {
-    norm = {};
-    if('i' in data) norm.id = data.i;
-    if('x' in data) norm.x = data.x;
-    if('y' in data) norm.y = data.y;
-    if('h' in data) norm.h = data.h;
-    if('d' in data) norm.direction = data.d;
-    if('s' in data) norm.speed = data.s;
-    if('r' in data) norm.rot_speed = data.r;
-    if('l' in data) norm.latency = data.l;
-    return norm;
-  }
-};
-
-var MSimMissile = function(player, data) {
-  this.player = player;
+var MSimMissile = function(game, data) {
+  this.game = game;
 
   for(var attr in data) {
     this[attr] = data[attr];
@@ -515,18 +559,22 @@ var MSimMissile = function(player, data) {
 };
 
 MSimMissile.extrapolate = function(initial, dTime) {
-  var disp = initial.direction*initial.speed*dTime;
+  var disp = initial.speed*dTime;
   return {dX: disp*Math.cos(initial.h), dY: disp*Math.sin(initial.h)};
 };
 
 MSimMissile.prototype = {
 
+  player: function() {
+    this.game.players[this.playerId];
+  },
+
   extrapolate: function() {
     var now = new Date();
-    var delta = MSimPlayer.extrapolate(this, (now - this._updated)/1000);
+    var delta = MSimMissile.extrapolate(this, (now - this._updated)/1000);
     
-    this.x = this.player.game.xPos(this.x + delta.dX);
-    this.y = this.player.game.yPos(this.y + delta.dY);
+    this.x = MSim.mod(this.x + delta.dX, this.game.width());
+    this.y = MSim.mod(this.y + delta.dY, this.game.height());
     this._updated = now;
    
     return this;

@@ -29,7 +29,7 @@ GamzClient.prototype = {
       } else if(typeof handlers == 'function' && id[1] == 'success') {
         handlers.apply(this, msg);
       } else {
-        // ignore
+        console.log('response of type '+id[1]+' received but not handled');
       }
     }
   },

@@ -75,8 +75,8 @@ class World
     @players = {}
     @clients = {}
     @missiles = {}
-    @last_id = 0
-    @last_global = Time.now
+    @last_pid = @last_mid = 0
+    #@last_global = Time.now
   end
 
   def x_coord(value)
@@ -88,7 +88,7 @@ class World
   end
 
   def on_connect(client)
-    p = @players[client] = Player.new(self, @last_id += 1)
+    p = @players[client] = Player.new(self, @last_pid += 1)
     @clients[p] = client
     notify_except p, :connect, p.data
   end
@@ -135,7 +135,7 @@ class World
   end
 
   def react_fire(player)
-    m = Missile.new(player, @last_id += 1)
+    m = Missile.new(player, @last_mid += 1)
     @missiles[m.id] = m
     notify_all :missile, m.data
     [:success]

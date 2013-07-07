@@ -8,9 +8,9 @@ class Player
     @world = world
     @id = id
     @direction = 0
-    @x, @y = 0.0, 0.0
+    @x, @y = world.width/2, world.height/2
     @h = 0.0 # radians
-    @r = 5
+    @r = 8
     @rot_speed = 0.0
     @speed = 200 # per second
     @score = 0

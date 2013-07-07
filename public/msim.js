@@ -37,6 +37,7 @@ var MSim = function(options) {
 
   this.rot_speed = Math.PI;
   this.redraw_rate = 25;
+  this.fire_rate = 100;
   this.correct_speed = 20;
   this.compensate = false;
 
@@ -276,7 +277,7 @@ MSim.prototype = {
       msim._fire();
       setTimeout(function() {
         msim._rapidFire();
-      }, 100);
+      }, msim.fire_rate);
     }
   },
 
@@ -287,23 +288,26 @@ MSim.prototype = {
     var ctx = this.display.canvas.getContext('2d');
     ctx.clearRect(0, 0, this.display.canvas.width, this.display.canvas.height);
 
-    // draw players
-    for(var id in this.players) {
-      ctx.fillStyle = id == this._playerId ? 'blue' : 'black';
-
-      var player = this.players[id];
-      player.extrapolate();
-      player.correct(this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED);
-      player.refresh();
-      this._drawPlayer(ctx, player);
-    }
-
     // draw missiles
     for(var id in this.missiles) {
       var missile = this.missiles[id];
       missile.extrapolate();
       this._drawMissile(ctx, missile);
     }
+
+    // draw other players
+    for(var id in this.players) {
+      var player = this.players[id];
+      player.extrapolate();
+      player.correct(this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED);
+      player.refresh();
+      if(player.id != this._playerId) {
+        this._drawPlayer(ctx, player);
+      }
+    }
+
+    // draw ourself on top
+    this._drawPlayer(ctx, this.player());
   },
 
   _drawPlayer: function(ctx, player) {
@@ -311,12 +315,12 @@ MSim.prototype = {
     var x = Math.round(player.x);
     var y = Math.round(player.y);
 
-    // TODO constants/options?
-    var point = 10;
+    var point = 1.5*player.r;
 
+    ctx.fillStyle = player.id == this._playerId ? 'darkgreen' : 'black';
     ctx.beginPath();
     // semi-circle
-    ctx.arc(x, y, player.r, h + 0.5*Math.PI, h - 0.5*Math.PI);
+    ctx.arc(x, y, player.r, h + 0.2*Math.PI, h - 0.2*Math.PI);
     // first side of the point
     var x_ = Math.cos(2*Math.PI - h)*point;
     var y_ = Math.sin(2*Math.PI - h)*point;
@@ -330,8 +334,7 @@ MSim.prototype = {
     var x = Math.round(missile.x);
     var y = Math.round(missile.y);
 
-
-    ctx.fillStyle = missile.playerId == this._playerId ? 'blue' : 'red';
+    ctx.fillStyle = missile.playerId == this._playerId ? 'darkgreen' : 'red';
     ctx.beginPath();
     ctx.arc(x, y, missile.r, 0, 2*Math.PI);
     ctx.closePath();
@@ -383,13 +386,12 @@ MSim.prototype = {
 
     explosion: function(missileId, hitPlayerIds) {
       var missile = this.missiles[missileId];
-      if(this.players[missile.playerId]) {
-        this.players[missile.playerId].score += hitPlayerIds.length;
-      }
+      this.players[missile.playerId].score += hitPlayerIds.length;
       for(var i = 0; i < hitPlayerIds.length; i++) {
         this.players[hitPlayerIds[i]].score--;
       }
       this._removeMissile(missile);
+      //console.log(Object.keys(this.missiles).length, 'missiles remaining');
     }
 
   }

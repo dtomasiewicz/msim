@@ -1,13 +1,14 @@
 var KeyCodes = {
-  LEFT: 37,
-  UP: 38,
-  RIGHT: 39,
-  DOWN: 40,
+  //LEFT: 37,
+  //UP: 38,
+  //RIGHT: 39,
+  //DOWN: 40,
+  UP: 87,
+  LEFT: 65,
+  DOWN: 83,
+  RIGHT: 68,
   SPACE: 32,
-
-  isArrow: function(keyCode) {
-    return keyCode >= 37 && keyCode <= 40;
-  }
+  ESC: 27
 };
 
 var MSim = function(options) {
@@ -19,13 +20,16 @@ var MSim = function(options) {
     btnup: $('<button>up</button>').get(0),
     btndown: $('<button>down</button>').get(0),
     btnleft: $('<button>left</button>').get(0),
-    btnright: $('<button>right</button>').get(0)
+    btnright: $('<button>right</button>').get(0),
+    btnfire: $('<button>fire</button>').get(0)
   };
 
   if('target' in options) {
     $(options.target).append(
       this.display.canvas,
-      $('<div></div').append(this.display.btnup, this.display.btndown, this.display.btnleft, this.display.btnright),
+      $('<div></div').append(
+        this.display.btnup, this.display.btndown, this.display.btnleft,
+        this.display.btnright, this.display.btnfire),
       this.display.players
     );
     this.display.canvas.focus();
@@ -44,7 +48,10 @@ var MSim = function(options) {
   // track the pressed state of keys
   this._keys = {};
   this._keys[KeyCodes.LEFT] = this._keys[KeyCodes.RIGHT] = 
-    this._keys[KeyCodes.UP] = this._keys[KeyCodes.DOWN] = false;
+    this._keys[KeyCodes.UP] = this._keys[KeyCodes.DOWN] =
+    this._keys[KeyCodes.SPACE] = false;
+
+  this._firing = false;
 
   this._gamz = new GamzClient();
 
@@ -146,15 +153,8 @@ MSim.prototype = {
       }
     });
 
-    msim.display.canvas.onkeypress = function(e) {
-      if(e.keyCode == KeyCodes.SPACE) {
-        e.preventDefault();
-        msim._fire();
-      }
-    };
-
     msim.display.canvas.onkeydown = function(e) {
-      if(KeyCodes.isArrow(e.keyCode)) {
+      if(e.keyCode != KeyCodes.ESC) {
         e.preventDefault();
 
         // some browsers fire keydown for each "press"-- we only want the first, so
@@ -168,15 +168,18 @@ MSim.prototype = {
             msim._set('direction', msim._keys[KeyCodes.UP] ? 0 : -1);
           } else if(e.keyCode == KeyCodes.LEFT) {
             msim._rotate(msim._keys[KeyCodes.RIGHT] ? 0 : -1);
-          } else {
+          } else if(e.keyCode == KeyCodes.RIGHT) {
             msim._rotate(msim._keys[KeyCodes.LEFT] ? 0 : 1);
+          } else if(e.keyCode == KeyCodes.SPACE) {
+            msim._firing = true;
+            msim._rapidFire();
           }
         }
       }
     };
 
     msim.display.canvas.onkeyup = function(e) {
-      if(KeyCodes.isArrow(e.keyCode)) {
+      if(e.keyCode != KeyCodes.ESC) {
         e.preventDefault();
         
         if(msim._keys[e.keyCode]) {
@@ -188,8 +191,10 @@ MSim.prototype = {
             msim._set('direction', msim._keys[KeyCodes.UP] ? 1 : 0);
           } else if(e.keyCode == KeyCodes.LEFT) {
             msim._rotate(msim._keys[KeyCodes.RIGHT] ? 1 : 0);
-          } else {
+          } else if(e.keyCode == KeyCodes.RIGHT) {
             msim._rotate(msim._keys[KeyCodes.LEFT] ? -1 : 0);
+          } else if(e.keyCode == KeyCodes.SPACE) {
+            msim._firing = false;
           }
         }
       }
@@ -209,6 +214,10 @@ MSim.prototype = {
 
     msim.display.btnright.onclick = function() {
       msim._set('heading', MSim.mod(msim.player().h+0.25*Math.PI, 2*Math.PI));
+    };
+
+    msim.display.btnfire.onclick = function() {
+      msim._fire();
     };
 
     var redraw;
@@ -261,6 +270,16 @@ MSim.prototype = {
     this._gamz.act('fire');
   },
 
+  _rapidFire: function() {
+    var msim = this;
+    if(msim._firing) {
+      msim._fire();
+      setTimeout(function() {
+        msim._rapidFire();
+      }, 100);
+    }
+  },
+
   _redraw: function() {
     // only draw if loaded
     if(this._playerId === null) return;
@@ -281,8 +300,6 @@ MSim.prototype = {
 
     // draw missiles
     for(var id in this.missiles) {
-      ctx.fillStyle = 'red';
-
       var missile = this.missiles[id];
       missile.extrapolate();
       this._drawMissile(ctx, missile);
@@ -295,12 +312,11 @@ MSim.prototype = {
     var y = Math.round(player.y);
 
     // TODO constants/options?
-    var radius = 5;
     var point = 10;
 
     ctx.beginPath();
     // semi-circle
-    ctx.arc(x, y, radius, h + 0.5*Math.PI, h - 0.5*Math.PI);
+    ctx.arc(x, y, player.r, h + 0.5*Math.PI, h - 0.5*Math.PI);
     // first side of the point
     var x_ = Math.cos(2*Math.PI - h)*point;
     var y_ = Math.sin(2*Math.PI - h)*point;
@@ -314,6 +330,8 @@ MSim.prototype = {
     var x = Math.round(missile.x);
     var y = Math.round(missile.y);
 
+
+    ctx.fillStyle = missile.playerId == this._playerId ? 'blue' : 'red';
     ctx.beginPath();
     ctx.arc(x, y, missile.r, 0, 2*Math.PI);
     ctx.closePath();
@@ -573,8 +591,8 @@ MSimMissile.prototype = {
     var now = new Date();
     var delta = MSimMissile.extrapolate(this, (now - this._updated)/1000);
     
-    this.x = MSim.mod(this.x + delta.dX, this.game.width());
-    this.y = MSim.mod(this.y + delta.dY, this.game.height());
+    this.x += delta.dX;
+    this.y += delta.dY;
     this._updated = now;
    
     return this;

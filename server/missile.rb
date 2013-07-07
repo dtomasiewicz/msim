@@ -11,11 +11,11 @@ class Missile
     @y = pi[:y]
     @h = pi[:h]
     @r = 3
-    @speed = player.speed
+    @speed = player.speed*1.5
   end
 
   def data
-    instant.merge h: @h, r: @r, id: @id, playerId: @player.id, speed: @speed
+    instant.merge! h: @h, r: @r, id: @id, playerId: @player.id, speed: @speed
   end
 
   def instant(time = Time.now)
@@ -23,8 +23,8 @@ class Missile
     disp = @speed*elapsed
 
     {
-      x: (@x + disp*Math.cos(@h)) % @player.world.width,
-      y: (@y + disp*Math.sin(@h)) % @player.world.height
+      x: @x + disp*Math.cos(@h),
+      y: @y + disp*Math.sin(@h)
     }
   end
 

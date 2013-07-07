@@ -1,0 +1,108 @@
+TODO
+
+use range-search data structure on server-side to reduce hit_scan
+complexity to O(m log p) from O(mp)
+
+better client-side correction:
+  currently, the server state is extrapolated to account for the 
+  server->client latency, then error values are set based on the difference
+  between this extrapolated state and the current local state. a rewind-and-
+  replay strategy might work better.
+
+continuous collision detection:
+  given player(x, y, r) and missile(x, y, r), colliding when:
+    sqrt[ (p.x - m.x)^2 + (p.y - m.y)^2 ] < p.r + m.r
+
+  need to rewrite in terms of some initial coordinates, direction,
+  heading, rot_speed and a time delta t
+
+  given player(xi, yi, d, s, h, dt):
+    p.x = xi + d*s*dt*cos(h)
+    p.y = yi + d*s*dt*sin(h)
+
+  given player(xi, yi, td, s, hi, rs, dt):
+    (td is "turning direction" = -1 when d = -1, 1 otherwise)
+    p.x = xi + (s/rs)*(cos(PI/2-hi-rs*dt*td) - sin(hi))
+    p.y = yi + (s/rs)*(cos(hi) - sin(PI/2-hi-rs*dt*td))
+
+  given missile(xi, yi, s, h, dt):
+    m.x = xi + s*dt*cos(h)
+    m.y = yi + s*dt*sin(h)
+
+  so when player is rotating, solve
+
+    sqrt[
+        (
+            (
+                p.x + (p.s/p.rs)*(cos(PI/2-p.h-p.rs*t*p.td) - sin(p.h))
+            )
+            -
+            (
+                m.x + m.s*t*cos(m.h)
+            )
+        )^2
+        +
+        (
+            (
+                p.y + (p.s/p.rs)*(cos(p.h) - sin(PI/2-p.h-p.rs*t*p.td))
+            )
+            -
+            (
+                m.y + m.s*t*sin(m.h)
+            )
+        )^2
+    ]
+    =
+    p.r + m.r
+
+  when player not rotating, solve
+
+    sqrt[
+        (
+            (
+                p.x + p.d*p.s*t*cos(p.h)
+            )
+            -
+            (
+                m.x + m.s*t*cos(m.h)
+            )
+        )^2
+        +
+        (
+            (
+                p.y + p.d*p.s*t*sin(p.h)
+            )
+            -
+            (
+                m.y + m.s*t*sin(m.h)
+            )
+        )^2
+    ]
+    =
+    p.r + m.r
+
+  when simplified, we get this quadratic equation:
+
+    (c_1^2 + c_3^2) t^2 + (2 c_1 c_2 + 2 c_3 c_4) t + (c_2^2 + c_4^2 - c_5) = 0
+    where:
+      c_1 = p.d p.s cos(p.h) - m.s cos(m.h)
+      c_2 = p.x - m.x
+      c_3 = p.d p.s sin(p.h) - m.s sin(m.h)
+      c_4 = p.y - m.y
+      c_5 = (p.r + m.r)^2
+
+  roots of this give us t values where a collision will occur; check if a t exists
+  in the current interval --> collision
+
+Okay so this isn't easy to do with a rotating player. Instead, two-step process:
+  1) determine if it was POSSIBLE a collision occurred between ticks, based on the
+     distance at the beginning and the elapsed time
+  2) use newton's method to try to find a time where the distance is <= the sum of
+     the radii
+
+Idea: tickless server
+  if it's possible to determine the time of all collision events in advance, ticks are
+  no longer needed. instead of ticking, each select() will timeout whenever the next
+  collision event is scheduled to occur. select() timeout might not be reliable enough
+  to warrant this though, and system scheduler could result in inaccuracies.
+

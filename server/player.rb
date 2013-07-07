@@ -1,6 +1,6 @@
 class Player
 
-  attr_reader :world, :id, :client, :direction, :x, :y, :h, :speed, :rot_speed
+  attr_reader :world, :id, :client, :direction, :x, :y, :h, :r, :speed, :rot_speed, :updated
   attr_accessor :latency, :score
 
   def initialize(world, id)
@@ -10,6 +10,7 @@ class Player
     @direction = 0
     @x, @y = 0.0, 0.0
     @h = 0.0 # radians
+    @r = 5
     @rot_speed = 0.0
     @speed = 200 # per second
     @score = 0
@@ -36,7 +37,7 @@ class Player
   end
 
   def data
-    instant.merge! id: @id, direction: @direction, speed: @speed,
+    instant.merge! r: @r, id: @id, direction: @direction, speed: @speed,
       rot_speed: @rot_speed, latency: @latency, score: @score
   end
 

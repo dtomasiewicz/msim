@@ -15,61 +15,32 @@ var KeyCodes = {
 };
 
 var MSim = function(options) {
-  if(typeof options == 'undefined') options = {};
 
-  this.display = {
-    canvas: $('<canvas class="msim-canvas" tabindex="1"></canvas>').get(0),
-    players: $('<ul class="msim-players"></ul>').get(0),
-    btnup: $('<button>up</button>').get(0),
-    btndown: $('<button>down</button>').get(0),
-    btnleft: $('<button>left</button>').get(0),
-    btnright: $('<button>right</button>').get(0),
-    btnfire: $('<button>fire</button>').get(0)
+  // default option values
+  this.options = {
+    rot_speed: Math.PI,
+    redraw_rate: 25,
+    fire_rate: 100,
+    correct_speed: 20,
+    compensate: false,
+    target: null
   };
 
-  if('target' in options) {
-    $(options.target).append(
-      this.display.canvas,
-      $('<div></div').append(
-        this.display.btnup, this.display.btndown, this.display.btnleft,
-        this.display.btnright, this.display.btnfire),
-      this.display.players
-    );
-    this.display.canvas.focus();
+  if(typeof options == 'object') {
+    for(var opt in options) {
+      this.options[opt] = options[opt];
+    }
   }
-
-  this.rot_speed = Math.PI;
-  this.redraw_rate = 25;
-  this.fire_rate = 100;
-  this.correct_speed = 20;
-  this.compensate = false;
-
-  this.players = null;
-  this._playerId = null;
-
-  this.missiles = null;
 
   // track the pressed state of keys
   this._keys = {};
   for(var key in KeyCodes) {
     this._keys[KeyCodes[key]] = false;
   }
-
   this._firing = false;
 
-  this._gamz = new GamzClient();
-
-  var msim = this;
-
-  this._gamz.onnotify = function(id) {
-    msim._notifyHandlers[id].apply(msim, Array.prototype.slice.call(arguments, 1));
-  };
-
-  this._gamz.onopen = function() {
-    msim._opened();
-  };
-
-  this._gamz.open({resource: '/gamz', secure: true});
+  this._reset();
+  this._start();
 };
 
 // fix for JS's modulus of negative numbers
@@ -92,12 +63,12 @@ MSim.prototype = {
     return this.players[this._playerId];
   },
 
-  latency: function() {
-    return this.player().latency;
+  rtt: function() {
+    return this.player().rtt;
   },
 
   delay: function() {
-    return this.latency()/2.0;
+    return this.rtt()/2.0;
   },
 
   width: function() {
@@ -114,6 +85,38 @@ MSim.prototype = {
 
   yPos: function(y) {
     return Math.max(0, Math.min(this.height(), y));
+  },
+
+  _reset: function() {
+
+    this.display = {
+      status: $('<p></p>').get(0),
+      canvas: $('<canvas class="msim-canvas" tabindex="1"></canvas>').get(0),
+      players: $('<ul class="msim-players"></ul>').get(0),
+      btnup: $('<button>up</button>').get(0),
+      btndown: $('<button>down</button>').get(0),
+      btnleft: $('<button>left</button>').get(0),
+      btnright: $('<button>right</button>').get(0),
+      btnfire: $('<button>fire</button>').get(0)
+    };
+
+    $(this.options.target).empty().append(this.display.status);
+
+    this.players = null;
+    this._playerId = null;
+    this.missiles = null;
+
+  },
+
+  _start: function() {
+    var msim = this;
+    msim._gamz = new GamzClient();
+    msim._gamz.onnotify = function(id) {
+      msim._notifyHandlers[id].apply(msim, Array.prototype.slice.call(arguments, 1));
+    };
+    msim._gamz.onopen = function() { msim._opened(); };
+    msim._gamz.onclose = function() { msim._closed(); };
+    msim._gamz.open({resource: '/gamz', secure: true});
   },
 
   _addPlayer: function(player) {
@@ -139,6 +142,21 @@ MSim.prototype = {
   },
 
   _opened: function() {
+
+    // create rest of UI
+
+    $(this.options.target).append(
+      this.display.status,
+      this.display.canvas,
+      $('<div></div').append(
+        this.display.btnup, this.display.btndown, this.display.btnleft,
+        this.display.btnright, this.display.btnfire),
+      this.display.players
+    );
+    this.display.canvas.focus();
+
+    // add event handlers
+
     var msim = this;
 
     this._gamz.act('state', [], function(width, height, players, playerId, missiles) {
@@ -237,8 +255,21 @@ MSim.prototype = {
     var redraw;
     (redraw = function () {
       msim._redraw();
-      setTimeout(redraw, msim.redraw_rate);
+      setTimeout(redraw, msim.options.redraw_rate);
     })();
+  },
+
+  _closed: function() {
+    this._reset();
+    this._setStatus('Lost connection to server. ');
+    var msim = this;
+    $('<button>CONNECT</button>').click(function() {
+      msim._start();
+    }).appendTo(this.display.status);
+  },
+
+  _setStatus: function(status) {
+    $(this.display.status).text(status);
   },
 
   // set an attribute for the current player, sending the action to the server
@@ -247,11 +278,11 @@ MSim.prototype = {
     player.update(attr, value);
 
     // for error correction, use the values from BEFORE the request was sent to
-    // approximately cancel latency
+    // approximately cancel RTT
     var bench = player.bench = {x: player.x, y: player.y, h: player.h};
 
     this._gamz.act(attr, [value], function(real) {
-      player.latency = real.latency;
+      player.rtt = real.rtt;
       if(bench == player.bench) {
         player.setError(
           real.x - bench.x,
@@ -304,7 +335,7 @@ MSim.prototype = {
     if(l && !r || r && !l) {
       // invert rotation when moving backwards
       var invert = this._keys[KeyCodes.DOWN] && !this._keys[KeyCodes.UP] ? -1 : 1;
-      this._set('rot_speed', invert*this.rot_speed*(l ? -1 : 1));
+      this._set('rot_speed', invert*this.options.rot_speed*(l ? -1 : 1));
     } else {
       this._set('rot_speed', 0);
     }
@@ -320,7 +351,7 @@ MSim.prototype = {
       msim._fire();
       setTimeout(function() {
         msim._rapidFire();
-      }, msim.fire_rate);
+      }, msim.options.fire_rate);
     }
   },
 
@@ -342,7 +373,7 @@ MSim.prototype = {
     for(var id in this.players) {
       var player = this.players[id];
       player.extrapolate();
-      player.correct(this.correct_speed || player.speed || MSim.DEFAULT_CORRECT_SPEED);
+      player.correct(this.options.correct_speed || player.speed);
       player.refresh();
       if(player.id != this._playerId) {
         this._drawPlayer(ctx, player);
@@ -412,9 +443,9 @@ MSim.prototype = {
         var player = this.players[data.id];
 
         if(player.id == this._playerId) {
-          player.latency = data.latency;
+          player.rtt = data.rtt;
         } else {
-          player.interpolate(data, this.compensate ? this.delay() : 0);
+          player.interpolate(data, this.options.compensate ? this.delay() : 0);
           delete data.x;
           delete data.y;
           delete data.h;
@@ -490,12 +521,12 @@ MSimPlayer.prototype = {
     }
   },
   
-  // if a latency is provided, will extrapolate a new current based on it.
+  // if a delay is provided, will extrapolate a new current based on it.
   // this may make complex movement look jerky, but will provide more accurate
   // positions for simpler movement patterns.
-  interpolate: function(data, latency) {
+  interpolate: function(data, delay) {
     this.extrapolate();
-    var remote = latency ? MSimPlayer.extrapolate(data, latency) : {dX: 0, dY: 0, dH: 0};
+    var remote = delay ? MSimPlayer.extrapolate(data, delay) : {dX: 0, dY: 0, dH: 0};
 
     this.setError(
       this.game.xPos(data.x + remote.dX) - this.game.xPos(this.x),
@@ -555,8 +586,8 @@ MSimPlayer.prototype = {
         'P'+this.id+' score <strong>'+this.score+'</strong> ('+
         Math.round(this.x)+', '+Math.round(this.y)+') rot '+
         (Math.round(this.h*10)/10)+' rad @ '+
-        (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
-        Math.round(this.latency*1000)+' ms'
+        (Math.round(this.rot_speed*10)/10)+' rad/s, RTT '+
+        Math.round(this.rtt*1000)+' ms'
       );
     }
     return this;

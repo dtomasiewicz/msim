@@ -12,7 +12,7 @@
         });
 
         $('.msim-opt').change(function() {
-          game[this.name] = $(this).is(':checkbox') ? $(this).is(':checked') : this.value;
+          game.options[this.name] = $(this).is(':checkbox') ? $(this).is(':checked') : this.value;
           game.display.canvas.focus();
         }).change();
       });

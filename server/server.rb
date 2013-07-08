@@ -12,9 +12,14 @@ server.each_seconds 3, preemptive: false do
   world.players.each do |client, player|
     start = Time.now
     client.ping do
-      player.latency = Time.now-start
+      player.rtt = Time.now-start
     end
   end
 end
 server.each_ticks(1){world.hit_scan_inst}
-server.start
+begin
+  server.start
+rescue Exception => e
+  puts "EXITING (#{e.inspect})"
+  server.cleanup
+end

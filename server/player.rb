@@ -2,7 +2,7 @@ class Player
 
   attr_reader :world, :id, :client, :x, :y, :d, :h, :m, :r,
     :speed, :rot_speed, :updated
-  attr_accessor :latency, :score
+  attr_accessor :rtt, :score
 
   def initialize(world, id)
     @updated = Time.now
@@ -39,7 +39,7 @@ class Player
 
   def data
     instant.merge! r: @r, id: @id, d: @d, m: @m, speed: @speed,
-      rot_speed: @rot_speed, latency: @latency, score: @score
+      rot_speed: @rot_speed, rtt: @rtt, score: @score
   end
 
   # computes the coordinates/heading at the given time

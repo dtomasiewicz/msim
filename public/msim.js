@@ -1,4 +1,5 @@
 var KeyCodes = {
+  //arrow keys
   //LEFT: 37,
   //UP: 38,
   //RIGHT: 39,
@@ -7,7 +8,9 @@ var KeyCodes = {
   LEFT: 65,
   DOWN: 83,
   RIGHT: 68,
-  SPACE: 32,
+  LSTRAFE: 81,
+  RSTRAFE: 69,
+  FIRE: 32,
   ESC: 27
 };
 
@@ -48,9 +51,9 @@ var MSim = function(options) {
 
   // track the pressed state of keys
   this._keys = {};
-  this._keys[KeyCodes.LEFT] = this._keys[KeyCodes.RIGHT] = 
-    this._keys[KeyCodes.UP] = this._keys[KeyCodes.DOWN] =
-    this._keys[KeyCodes.SPACE] = false;
+  for(var key in KeyCodes) {
+    this._keys[KeyCodes[key]] = false;
+  }
 
   this._firing = false;
 
@@ -117,7 +120,7 @@ MSim.prototype = {
     this.players[player.id] = player;
     player._li = $('<li></li>').get(0);
     if(player.id == this._playerId) {
-      player._li.style.color = '#00f';
+      player._li.style.color = 'darkgreen';
     }
     $(this.display.players).append(player._li);
   },
@@ -138,7 +141,7 @@ MSim.prototype = {
   _opened: function() {
     var msim = this;
 
-    this._gamz.act('info', [], function(width, height, players, playerId, missiles) {
+    this._gamz.act('state', [], function(width, height, players, playerId, missiles) {
       msim.display.canvas.width = width;
       msim.display.canvas.height = height;
       msim._playerId = playerId;
@@ -163,17 +166,21 @@ MSim.prototype = {
         if(!msim._keys[e.keyCode]) {
           msim._keys[e.keyCode] = true;
 
-          if(e.keyCode == KeyCodes.UP) {
-            msim._set('direction', msim._keys[KeyCodes.DOWN] ? 0 : 1);
-          } else if(e.keyCode == KeyCodes.DOWN) {
-            msim._set('direction', msim._keys[KeyCodes.UP] ? 0 : -1);
-          } else if(e.keyCode == KeyCodes.LEFT) {
-            msim._rotate(msim._keys[KeyCodes.RIGHT] ? 0 : -1);
-          } else if(e.keyCode == KeyCodes.RIGHT) {
-            msim._rotate(msim._keys[KeyCodes.LEFT] ? 0 : 1);
-          } else if(e.keyCode == KeyCodes.SPACE) {
-            msim._firing = true;
-            msim._rapidFire();
+          switch(e.keyCode) {
+            case KeyCodes.UP:
+            case KeyCodes.DOWN:
+            case KeyCodes.LSTRAFE:
+            case KeyCodes.RSTRAFE:
+              msim._computeMovement();
+              break;
+            case KeyCodes.LEFT:
+            case KeyCodes.RIGHT:
+              msim._computeRotation();
+              break;
+            case KeyCodes.FIRE:
+              msim._firing = true;
+              msim._rapidFire();
+              break;
           }
         }
       }
@@ -186,35 +193,41 @@ MSim.prototype = {
         if(msim._keys[e.keyCode]) {
           msim._keys[e.keyCode] = false;
 
-          if(e.keyCode == KeyCodes.UP) {
-            msim._set('direction', msim._keys[KeyCodes.DOWN] ? -1 : 0);
-          } else if(e.keyCode == KeyCodes.DOWN) {
-            msim._set('direction', msim._keys[KeyCodes.UP] ? 1 : 0);
-          } else if(e.keyCode == KeyCodes.LEFT) {
-            msim._rotate(msim._keys[KeyCodes.RIGHT] ? 1 : 0);
-          } else if(e.keyCode == KeyCodes.RIGHT) {
-            msim._rotate(msim._keys[KeyCodes.LEFT] ? -1 : 0);
-          } else if(e.keyCode == KeyCodes.SPACE) {
-            msim._firing = false;
+          switch(e.keyCode) {
+            case KeyCodes.UP:
+            case KeyCodes.DOWN:
+            case KeyCodes.LSTRAFE:
+            case KeyCodes.RSTRAFE:
+              msim._computeMovement();
+              break;
+            case KeyCodes.LEFT:
+            case KeyCodes.RIGHT:
+              msim._computeRotation();
+              break;
+            case KeyCodes.FIRE:
+              msim._firing = false;
+              break;
           }
         }
       }
     };
 
     msim.display.btnup.onclick = function() {
-      msim._set('direction', msim.player().direction == 1 ? 0 : 1);
+      msim._set('d', 0);
+      msim._set('m', msim.player().m == 1 ? 0 : 1);
     };
 
     msim.display.btndown.onclick = function() {
-      msim._set('direction', msim.player().direction == -1 ? 0 : -1);
+      msim._set('d', Math.PI);
+      msim._set('m', msim.player().m == 1 ? 0 : 1);
     };
 
     msim.display.btnleft.onclick = function() {
-      msim._set('heading', MSim.mod(msim.player().h-0.25*Math.PI, 2*Math.PI));
+      msim._set('h', MSim.mod(msim.player().h-0.25*Math.PI, 2*Math.PI));
     };
 
     msim.display.btnright.onclick = function() {
-      msim._set('heading', MSim.mod(msim.player().h+0.25*Math.PI, 2*Math.PI));
+      msim._set('h', MSim.mod(msim.player().h+0.25*Math.PI, 2*Math.PI));
     };
 
     msim.display.btnfire.onclick = function() {
@@ -250,21 +263,51 @@ MSim.prototype = {
     });
   },
 
-  _backward: function() {
-    this._set('direction', -1);
+  _computeMovement: function() {
+    var up = this._keys[KeyCodes.UP], down = this._keys[KeyCodes.DOWN],
+      ls = this._keys[KeyCodes.LSTRAFE], rs = this._keys[KeyCodes.RSTRAFE];
+
+    var dir, mot;
+    if(up && !down || down && !up) {
+      mot = 1;
+      if(ls && !rs || rs && !ls) {
+        if(up) {
+          dir = rs ? Math.PI/4 : -Math.PI/4;
+        } else {
+          dir = rs ? 3*Math.PI/4 : -3*Math.PI/4;
+        }
+      } else {
+        dir = up ? 0 : Math.PI;
+      }
+    } else {
+      if(ls && rs) {
+        mot = 0;
+        dir = null;
+      } else if(ls || rs) {
+        mot = 1;
+        dir = rs ? Math.PI/2 : -Math.PI/2;
+      } else {
+        mot = 0;
+        dir = null;
+      }
+    }
+
+    if(dir !== null) {
+      this._set('d', dir);
+    }
+    this._set('m', mot);
   },
 
-  _forward: function() {
-    this._set('direction', 1);
-  },
+  _computeRotation: function() {
+    var l = this._keys[KeyCodes.LEFT], r = this._keys[KeyCodes.RIGHT];
 
-  _stop: function() {
-    this._set('direction', 0);
-  },
-
-  // direction: 1=CCW, -1=CW, 0=none
-  _rotate: function(direction) {
-    this._set('rot_speed', direction*this.rot_speed);
+    if(l && !r || r && !l) {
+      // invert rotation when moving backwards
+      var invert = this._keys[KeyCodes.DOWN] && !this._keys[KeyCodes.UP] ? -1 : 1;
+      this._set('rot_speed', invert*this.rot_speed*(l ? -1 : 1));
+    } else {
+      this._set('rot_speed', 0);
+    }
   },
 
   _fire: function() {
@@ -286,7 +329,7 @@ MSim.prototype = {
     if(this._playerId === null) return;
 
     var ctx = this.display.canvas.getContext('2d');
-    ctx.clearRect(0, 0, this.display.canvas.width, this.display.canvas.height);
+    ctx.clearRect(0, 0, this.width(), this.height());
 
     // draw missiles
     for(var id in this.missiles) {
@@ -384,12 +427,12 @@ MSim.prototype = {
       this._addMissile(new MSimMissile(this, data));
     },
 
-    explosion: function(missileId, hitPlayerIds) {
+    hit: function(missileId, hitPlayerIds) {
       var missile = this.missiles[missileId];
       this.players[missile.playerId].score += hitPlayerIds.length;
-      for(var i = 0; i < hitPlayerIds.length; i++) {
-        this.players[hitPlayerIds[i]].score--;
-      }
+      //for(var i = 0; i < hitPlayerIds.length; i++) {
+      //  this.players[hitPlayerIds[i]].score--;
+      //}
       this._removeMissile(missile);
       //console.log(Object.keys(this.missiles).length, 'missiles remaining');
     }
@@ -508,8 +551,9 @@ MSimPlayer.prototype = {
 
   refresh: function() {
     if(this._li) {
-      $(this._li).text(
-        '#'+this.id+' score '+this.score+' ('+Math.round(this.x)+', '+Math.round(this.y)+') rot '+
+      $(this._li).html(
+        'P'+this.id+' score <strong>'+this.score+'</strong> ('+
+        Math.round(this.x)+', '+Math.round(this.y)+') rot '+
         (Math.round(this.h*10)/10)+' rad @ '+
         (Math.round(this.rot_speed*10)/10)+' rad/s, lat '+
         Math.round(this.latency*1000)+' ms'
@@ -522,22 +566,6 @@ MSimPlayer.prototype = {
 
 // given initial position/movement information, approximates the position
 // and heading deltas after a given dTime seconds have elapsed.
-//
-//   initial = {
-//     rot_speed: number rad/s
-//     speed: number pix/s
-//     heading: number rad
-//     direction: 1 (forward), 0 (stationary), or -1 (backward)
-//   }
-//
-//   dTime = number seconds
-//
-//   return = {
-//     dX: number pixels
-//     dY: number pixels
-//     dH: number rad
-//   }
-//
 MSimPlayer.extrapolate = function(initial, dTime) {
   var delta = {
     dX: 0.0,
@@ -545,22 +573,21 @@ MSimPlayer.extrapolate = function(initial, dTime) {
     dH: 0.0
   };
 
-  var sinH = Math.sin(initial.h);
-  var cosH = Math.cos(initial.h);
+  var sinH = Math.sin(initial.h+initial.d);
+  var cosH = Math.cos(initial.h+initial.d);
 
   if(initial.rot_speed != 0.0) {
     delta.dH = initial.rot_speed*dTime;
 
     // if moving, apply to an arc; dH is arc angle
-    if(initial.direction) {
-      delta.dH *= initial.direction; // invert turning when moving backwards
+    if(initial.m) {
       var radius = initial.speed/initial.rot_speed;
-      var l = Math.PI/2-initial.h-delta.dH;
+      var l = Math.PI/2-(initial.h+initial.d)-delta.dH;
       delta.dX = radius * (Math.cos(l) - sinH);
       delta.dY = radius * (cosH - Math.sin(l));
     }
   } else {
-    var disp = initial.direction*initial.speed*dTime;
+    var disp = initial.m*initial.speed*dTime;
     delta.dX = disp*cosH;
     delta.dY = disp*sinH;
   }

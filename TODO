@@ -1,5 +1,8 @@
 TODO
 
+  - allow sending of direction and motion together, as they are frequently
+    changed at the same time
+
 use range-search data structure on server-side to reduce hit_scan
 complexity to O(m log p) from O(mp)
 
